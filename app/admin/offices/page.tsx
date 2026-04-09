@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic'
+
 import AdminOffices from '@/components/AdminOffices'
 import { prisma } from '@/lib/prisma'
 
