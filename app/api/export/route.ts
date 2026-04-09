@@ -68,7 +68,8 @@ async function fillPhotoSheet(
     if (buf) {
       const ext = positionPhoto.filePath.split('?')[0].split('.').pop()?.toLowerCase()
       const imgId = workbook.addImage({
-        buffer: buf,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        buffer: buf as any,
         extension: (ext === 'png' ? 'png' : 'jpeg') as 'png' | 'jpeg',
       })
       ps.addImage(imgId, { tl: { col: 0, row: 3 }, br: { col: 4, row: 4 } })
@@ -91,7 +92,8 @@ async function fillPhotoSheet(
     if (!buf) return
     const ext = photo.filePath.split('?')[0].split('.').pop()?.toLowerCase()
     const imgId = workbook.addImage({
-      buffer: buf,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      buffer: buf as any,
       extension: (ext === 'png' ? 'png' : 'jpeg') as 'png' | 'jpeg',
     })
     ps.addImage(imgId, { tl, br })
