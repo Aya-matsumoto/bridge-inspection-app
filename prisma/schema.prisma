@@ -1,0 +1,54 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model InspectionRecord {
+  id              Int      @id @default(autoincrement())
+  officeNo        Int
+  mainOffice      String
+  subOffice       String
+  routeNo         Int
+  bridgeName      String
+  damageType      String
+  location        String
+  discoveryDate   DateTime
+  measureStatus   String
+  measureDate     DateTime?
+  measurePlan     String?
+  notes           String?
+  status          String   @default("draft")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  photos          Photo[]
+}
+
+model Photo {
+  id           Int              @id @default(autoincrement())
+  recordId     Int
+  record       InspectionRecord @relation(fields: [recordId], references: [id], onDelete: Cascade)
+  type         String
+  filePath     String
+  originalName String
+  createdAt    DateTime         @default(now())
+}
+
+model SubOfficeMaster {
+  id          Int      @id @default(autoincrement())
+  name        String   @unique
+  mainOffice  String
+  isActive    Boolean  @default(true)
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model AdminSession {
+  id        String   @id
+  createdAt DateTime @default(now())
+  expiresAt DateTime
+}

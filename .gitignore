@@ -1,0 +1,22 @@
+# 依存パッケージ
+node_modules/
+
+# ビルド成果物
+.next/
+out/
+
+# 環境変数（秘密情報）
+.env
+.env.local
+.env.production
+
+# データベース
+prisma/dev.db
+prisma/dev.db-journal
+
+# アップロードファイル（ローカル開発用）
+public/uploads/
+
+# OS
+.DS_Store
+Thumbs.db
