@@ -7,15 +7,19 @@ import { readFile } from 'fs/promises'
 // Blob URL または ローカルパスから画像Bufferを取得する共通関数
 async function fetchImageBuffer(filePath: string): Promise<Buffer | null> {
   try {
+    let buf: Buffer
     if (filePath.startsWith('http://') || filePath.startsWith('https://')) {
       // Vercel Blob URL → fetch で取得
       const res = await fetch(filePath)
       if (!res.ok) return null
-      return Buffer.from(await res.arrayBuffer())
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      buf = Buffer.from(await res.arrayBuffer()) as any
     } else {
       // ローカルパス（開発環境用）
-      return await readFile(join(process.cwd(), 'public', 'uploads', filePath))
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      buf = (await readFile(join(process.cwd(), 'public', 'uploads', filePath))) as any
     }
+    return buf
   } catch {
     return null
   }
