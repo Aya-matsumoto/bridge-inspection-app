@@ -72,7 +72,8 @@ async function fillPhotoSheet(
         buffer: buf as any,
         extension: (ext === 'png' ? 'png' : 'jpeg') as 'png' | 'jpeg',
       })
-      ps.addImage(imgId, { tl: { col: 0, row: 3 }, br: { col: 4, row: 4 } })
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      ps.addImage(imgId, { tl: { col: 0, row: 3 }, br: { col: 4, row: 4 } } as any)
     }
   }
 
@@ -96,7 +97,8 @@ async function fillPhotoSheet(
       buffer: buf as any,
       extension: (ext === 'png' ? 'png' : 'jpeg') as 'png' | 'jpeg',
     })
-    ps.addImage(imgId, { tl, br })
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    ps.addImage(imgId, { tl, br } as any)
   }
 
   await embed(inspPhotos,  0, { col: 0, row: 6 }, { col: 2, row: 7 })
