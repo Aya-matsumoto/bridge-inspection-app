@@ -34,6 +34,82 @@ function formatJpDate(date: Date): string {
 const TEMPLATE_PHOTO_SHEET_COUNT = 20
 
 // ─────────────────────────────────────────────────────────────
+// 画像サイズ取得・配置ヘルパー
+// ─────────────────────────────────────────────────────────────
+
+const EMU_PER_PX = 9525  // 1ピクセル = 9525 EMU
+
+// PNG / JPEG ヘッダーから画像の元サイズを取得
+function getImageSize(buf: Buffer, ext: string): { w: number; h: number } | null {
+  try {
+    if (ext === 'png') {
+      // PNG: バイト16-19が幅、20-23が高さ
+      return { w: buf.readUInt32BE(16), h: buf.readUInt32BE(20) }
+    }
+    // JPEG: SOF マーカーを探す
+    let i = 2
+    while (i < buf.length - 9) {
+      if (buf[i] !== 0xFF) { i++; continue }
+      const m = buf[i + 1]
+      if (m >= 0xC0 && m <= 0xCF && m !== 0xC4 && m !== 0xC8 && m !== 0xCC) {
+        return { w: buf.readUInt16BE(i + 7), h: buf.readUInt16BE(i + 5) }
+      }
+      if (i + 3 >= buf.length) break
+      i += 2 + buf.readUInt16BE(i + 2)
+    }
+  } catch { /* ignore */ }
+  return null
+}
+
+// セル範囲のピクセルサイズを計算（addImage の 0-indexed 座標を受け取る）
+function getCellAreaPx(
+  ps: ExcelJS.Worksheet,
+  tlCol: number, tlRow: number,
+  brCol: number, brRow: number
+): { cellW: number; cellH: number } {
+  let cellW = 0
+  for (let c = tlCol + 1; c <= brCol; c++) {
+    cellW += Math.round(((ps.getColumn(c) as any).width ?? 8.43) * 7 + 5)
+  }
+  let cellH = 0
+  for (let r = tlRow + 1; r <= brRow; r++) {
+    cellH += Math.round(((ps.getRow(r) as any).height ?? 15) * 96 / 72)
+  }
+  return { cellW, cellH }
+}
+
+// 縦横比を保ちながらセルの 98% に収めて中央配置
+function placeImageFit(
+  ps: ExcelJS.Worksheet,
+  imgId: number,
+  buf: Buffer,
+  ext: string,
+  tlCol: number, tlRow: number,
+  brCol: number, brRow: number
+) {
+  const { cellW, cellH } = getCellAreaPx(ps, tlCol, tlRow, brCol, brRow)
+  const availW = cellW * 0.98
+  const availH = cellH * 0.98
+
+  const imgSize = getImageSize(buf, ext)
+  if (imgSize && imgSize.w > 0 && imgSize.h > 0) {
+    const scale   = Math.min(availW / imgSize.w, availH / imgSize.h)
+    const scaledW = Math.round(imgSize.w * scale)
+    const scaledH = Math.round(imgSize.h * scale)
+    // セル内で中央揃え（EMU オフセット）
+    const xOffEmu = Math.round((cellW - scaledW) / 2 * EMU_PER_PX)
+    const yOffEmu = Math.round((cellH - scaledH) / 2 * EMU_PER_PX)
+    ps.addImage(imgId, {
+      tl: { col: tlCol, row: tlRow, colOff: xOffEmu, rowOff: yOffEmu },
+      ext: { width: scaledW, height: scaledH },
+    } as any)
+  } else {
+    // 画像サイズ取得失敗時のフォールバック
+    ps.addImage(imgId, { tl: { col: tlCol, row: tlRow }, br: { col: brCol, row: brRow } } as any)
+  }
+}
+
+// ─────────────────────────────────────────────────────────────
 // 写真シートにレコードデータ・画像を書き込む（全シート共通）
 // ─────────────────────────────────────────────────────────────
 async function fillPhotoSheet(
@@ -49,63 +125,52 @@ async function fillPhotoSheet(
 ) {
   const discoveryDate = new Date(record.discoveryDate)
 
-  // D1: 通し番号（テンプレートの 1/2/3 を正しい番号に上書き）
+  // D1: 通し番号
   ps.getCell('D1').value = sheetNum
-
-  // B1: 橋梁名（テンプレートの VLOOKUP 式を実値に置き換え）
+  // B1: 橋梁名
   ps.getCell('B1').value = record.bridgeName
-
-  // B2: 損傷種別（同上）
+  // B2: 損傷種別
   ps.getCell('B2').value = record.damageType
-
-  // A6: 撮影日（同上）
+  // A6: 撮影日
   ps.getCell('A6').value = `${formatJpDate(discoveryDate)}撮影`
 
-  // A4: 位置図
-  const positionPhoto = record.photos.find(p => p.type === 'position')
-  if (positionPhoto) {
-    ps.getCell('A4').value = '' // テンプレートの説明テキストをクリア
-    const buf = await fetchImageBuffer(positionPhoto.filePath)
-    if (buf) {
-      const ext = positionPhoto.filePath.split('?')[0].split('.').pop()?.toLowerCase()
-      const imgId = workbook.addImage({
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        buffer: buf as any,
-        extension: (ext === 'png' ? 'png' : 'jpeg') as 'png' | 'jpeg',
-      })
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      ps.addImage(imgId, { tl: { col: 0, row: 3 }, br: { col: 4, row: 4 } } as any)
-    }
-  }
-
-  // 点検時写真・措置後写真を埋め込む
-  const inspPhotos  = record.photos.filter(p => p.type === 'inspection')
-  const afterPhotos = record.photos.filter(p => p.type === 'after')
-
-  async function embed(
-    photos: typeof inspPhotos,
-    index: number,
-    tl: { col: number; row: number },
-    br: { col: number; row: number }
+  // ── 画像を埋め込む共通処理 ──
+  async function embedImage(
+    filePath: string,
+    tlCol: number, tlRow: number,
+    brCol: number, brRow: number
   ) {
-    const photo = photos[index]
-    if (!photo) return
-    const buf = await fetchImageBuffer(photo.filePath)
+    const buf = await fetchImageBuffer(filePath)
     if (!buf) return
-    const ext = photo.filePath.split('?')[0].split('.').pop()?.toLowerCase()
+    const ext = filePath.split('?')[0].split('.').pop()?.toLowerCase() ?? 'jpeg'
     const imgId = workbook.addImage({
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       buffer: buf as any,
       extension: (ext === 'png' ? 'png' : 'jpeg') as 'png' | 'jpeg',
     })
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    ps.addImage(imgId, { tl, br } as any)
+    placeImageFit(ps, imgId, buf, ext, tlCol, tlRow, brCol, brRow)
   }
 
-  await embed(inspPhotos,  0, { col: 0, row: 6 }, { col: 2, row: 7 })
-  await embed(afterPhotos, 0, { col: 2, row: 6 }, { col: 4, row: 7 })
-  await embed(inspPhotos,  1, { col: 0, row: 7 }, { col: 2, row: 8 })
-  await embed(afterPhotos, 1, { col: 2, row: 7 }, { col: 4, row: 8 })
+  // A4: 位置図（A4:D4 → tlCol=0,tlRow=3,brCol=4,brRow=4）
+  const positionPhoto = record.photos.find(p => p.type === 'position')
+  if (positionPhoto) {
+    ps.getCell('A4').value = ''
+    await embedImage(positionPhoto.filePath, 0, 3, 4, 4)
+  }
+
+  // 点検時写真・措置後写真
+  const inspPhotos  = record.photos.filter(p => p.type === 'inspection')
+  const afterPhotos = record.photos.filter(p => p.type === 'after')
+
+  async function embed(photos: typeof inspPhotos, index: number,
+    tlCol: number, tlRow: number, brCol: number, brRow: number) {
+    if (!photos[index]) return
+    await embedImage(photos[index].filePath, tlCol, tlRow, brCol, brRow)
+  }
+
+  await embed(inspPhotos,  0, 0, 6, 2, 7)
+  await embed(afterPhotos, 0, 2, 6, 4, 7)
+  await embed(inspPhotos,  1, 0, 7, 2, 8)
+  await embed(afterPhotos, 1, 2, 7, 4, 8)
 
   // 3枚目以降の写真は追加行に配置
   const maxExtra = Math.max(inspPhotos.length, afterPhotos.length) - 2
@@ -115,8 +180,8 @@ async function fillPhotoSheet(
     ps.getRow(extraRow + 1).height = 187.5
     try { ps.mergeCells(extraRow + 1, 1, extraRow + 1, 2) } catch { /* 既存結合 */ }
     try { ps.mergeCells(extraRow + 1, 3, extraRow + 1, 4) } catch { /* 既存結合 */ }
-    await embed(inspPhotos,  2 + j, { col: 0, row: extraRow }, { col: 2, row: extraRow + 1 })
-    await embed(afterPhotos, 2 + j, { col: 2, row: extraRow }, { col: 4, row: extraRow + 1 })
+    await embed(inspPhotos,  2 + j, 0, extraRow, 2, extraRow + 1)
+    await embed(afterPhotos, 2 + j, 2, extraRow, 4, extraRow + 1)
   }
 }
 
