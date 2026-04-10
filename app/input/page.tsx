@@ -56,6 +56,8 @@ export default function InputPage() {
   const [saving,            setSaving]            = useState(false)
   const [submitted,         setSubmitted]         = useState(false)
   const [submittedOffice,   setSubmittedOffice]   = useState('')
+  const [inspDragOver,      setInspDragOver]      = useState(false)
+  const [posDragOver,       setPosDragOver]       = useState(false)
 
   useEffect(() => {
     fetch('/api/offices')
@@ -88,9 +90,8 @@ export default function InputPage() {
     return errs
   }
 
-  // 点検時写真の選択
-  function handleInspectionPhotoChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const files = Array.from(e.target.files || [])
+  // ── 点検時写真：ファイルを処理する共通関数 ──
+  function processInspectionFiles(files: File[]) {
     const newErrors: Record<string, string> = {}
     const validFiles: PhotoPreview[] = []
     for (const file of files) {
@@ -112,6 +113,16 @@ export default function InputPage() {
     if (Object.keys(newErrors).length > 0) setErrors(prev => ({ ...prev, ...newErrors }))
   }
 
+  function handleInspectionPhotoChange(e: React.ChangeEvent<HTMLInputElement>) {
+    processInspectionFiles(Array.from(e.target.files || []))
+  }
+
+  function handleInspectionDrop(e: React.DragEvent) {
+    e.preventDefault()
+    setInspDragOver(false)
+    processInspectionFiles(Array.from(e.dataTransfer.files))
+  }
+
   function removeInspectionPhoto(index: number) {
     setInspectionPhotos(prev => {
       URL.revokeObjectURL(prev[index].preview)
@@ -119,10 +130,8 @@ export default function InputPage() {
     })
   }
 
-  // 位置図の選択
-  function handlePositionDiagramChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0]
-    if (!file) return
+  // ── 位置図：ファイルを処理する共通関数 ──
+  function processPositionFile(file: File) {
     if (!['image/jpeg', 'image/png'].includes(file.type)) {
       setErrors(prev => ({ ...prev, position: 'JPGまたはPNG形式のファイルを選択してください' }))
       return
@@ -131,12 +140,22 @@ export default function InputPage() {
       setErrors(prev => ({ ...prev, position: '20MB以下のファイルを選択してください' }))
       return
     }
-    // 既存プレビューを解放
     if (positionDiagram) URL.revokeObjectURL(positionDiagram.preview)
     setPositionDiagram({ originalFile: file, preview: URL.createObjectURL(file) })
     setErrors(prev => { const e = { ...prev }; delete e.position; return e })
-    // アップロードしたらすぐにアノテーター起動
     setShowAnnotator(true)
+  }
+
+  function handlePositionDiagramChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (file) processPositionFile(file)
+  }
+
+  function handlePositionDrop(e: React.DragEvent) {
+    e.preventDefault()
+    setPosDragOver(false)
+    const file = e.dataTransfer.files[0]
+    if (file) processPositionFile(file)
   }
 
   // アノテーター保存コールバック
@@ -383,9 +402,19 @@ export default function InputPage() {
               📷 写真（点検時）
               <span className="ml-2 text-xs font-normal text-gray-500">任意・JPG/PNG・10MB以下・最大2枚</span>
             </p>
-            <label className="flex items-center justify-center w-full h-10 border-2 border-dashed border-gray-300 rounded cursor-pointer hover:bg-gray-50 mb-2">
-              <span className="text-xs text-gray-500">写真を選択</span>
-              <input type="file" accept="image/jpeg,image/png" multiple capture="environment"
+            <label
+              className={`flex flex-col items-center justify-center w-full h-20 border-2 border-dashed rounded cursor-pointer mb-2 transition-colors ${
+                inspDragOver
+                  ? 'border-blue-400 bg-blue-50'
+                  : 'border-gray-300 hover:bg-gray-50'
+              }`}
+              onDragOver={e => { e.preventDefault(); setInspDragOver(true) }}
+              onDragLeave={() => setInspDragOver(false)}
+              onDrop={handleInspectionDrop}
+            >
+              <span className="text-xl mb-1">📂</span>
+              <span className="text-xs text-gray-500">ここにドロップ、または<span className="text-blue-500 underline">クリックして選択</span></span>
+              <input type="file" accept="image/jpeg,image/png" multiple
                 className="hidden" onChange={handleInspectionPhotoChange} />
             </label>
             {errors.photo_inspection && <p className="text-red-500 text-xs mb-1">{errors.photo_inspection}</p>}
@@ -413,8 +442,18 @@ export default function InputPage() {
 
             {!positionDiagram ? (
               <>
-                <label className="flex items-center justify-center w-full h-10 border-2 border-dashed border-blue-300 rounded cursor-pointer hover:bg-blue-50 mb-2 bg-blue-50">
-                  <span className="text-xs text-blue-600 font-medium">位置図を選択して書き込みを開始</span>
+                <label
+                  className={`flex flex-col items-center justify-center w-full h-20 border-2 border-dashed rounded cursor-pointer mb-2 transition-colors ${
+                    posDragOver
+                      ? 'border-blue-500 bg-blue-100'
+                      : 'border-blue-300 bg-blue-50 hover:bg-blue-100'
+                  }`}
+                  onDragOver={e => { e.preventDefault(); setPosDragOver(true) }}
+                  onDragLeave={() => setPosDragOver(false)}
+                  onDrop={handlePositionDrop}
+                >
+                  <span className="text-xl mb-1">🗺️</span>
+                  <span className="text-xs text-blue-600 font-medium">ここにドロップ、または<span className="underline">クリックして選択</span></span>
                   <input type="file" accept="image/jpeg,image/png"
                     className="hidden" onChange={handlePositionDiagramChange} />
                 </label>
