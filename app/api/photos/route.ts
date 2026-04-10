@@ -25,7 +25,10 @@ export async function POST(req: NextRequest) {
   const fileName = `${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`
 
   // Vercel Blob にアップロード（公開アクセス可）
-  const blob = await put(fileName, file, { access: 'public' })
+  const blob = await put(fileName, file, {
+    access: 'public',
+    token: process.env.BLOB_READ_WRITE_TOKEN,
+  })
 
   const photo = await prisma.photo.create({
     data: {
