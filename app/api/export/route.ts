@@ -96,11 +96,21 @@ function placeImageFit(
     const scale   = Math.min(availW / imgSize.w, availH / imgSize.h)
     const scaledW = Math.round(imgSize.w * scale)
     const scaledH = Math.round(imgSize.h * scale)
-    // セル内で中央揃え（EMU オフセット）
-    const xOffEmu = Math.round((cellW - scaledW) / 2 * EMU_PER_PX)
-    const yOffEmu = Math.round((cellH - scaledH) / 2 * EMU_PER_PX)
+
+    // 中央揃えのオフセット（ピクセル）
+    const xOffPx = (cellW - scaledW) / 2
+    const yOffPx = (cellH - scaledH) / 2
+
+    // 先頭の列・行のピクセルサイズで割って小数の col/row 位置に変換
+    // ExcelJS は tl.col / tl.row に小数を渡すことで列・行内の位置を指定できる
+    const firstColPx = Math.round(((ps.getColumn(tlCol + 1) as any).width ?? 8.43) * 7 + 5)
+    const firstRowPx = Math.round(((ps.getRow(tlRow + 1) as any).height ?? 15) * 96 / 72)
+
     ps.addImage(imgId, {
-      tl: { col: tlCol, row: tlRow, colOff: xOffEmu, rowOff: yOffEmu },
+      tl: {
+        col: tlCol + xOffPx / firstColPx,
+        row: tlRow + yOffPx / firstRowPx,
+      },
       ext: { width: scaledW, height: scaledH },
     } as any)
   } else {
