@@ -43,7 +43,7 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
   const id = parseInt(params.id)
   const record = await prisma.inspectionRecord.update({
     where: { id },
-    data: { status: 'deleted' },
+    data: { status: 'deleted', deletedAt: new Date() },
   })
   // 削除後も通し番号を再計算
   await recalcOfficeNo(record.subOffice)

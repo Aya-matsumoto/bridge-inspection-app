@@ -22,6 +22,7 @@ model InspectionRecord {
   measurePlan     String?
   notes           String?
   status          String   @default("draft")
+  deletedAt       DateTime?
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
   photos          Photo[]

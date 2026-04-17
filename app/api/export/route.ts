@@ -67,9 +67,13 @@ function getCellAreaPx(
   tlCol: number, tlRow: number,
   brCol: number, brRow: number
 ): { cellW: number; cellH: number } {
+  // 最初の列の幅を基準値として取得（テンプレートで複数列が同じ幅で定義されている場合、
+  // ExcelJS が 2列目以降の幅を undefined で返すことがあるため）
+  const firstColWidth = ((ps.getColumn(tlCol + 1) as any).width ?? 8.43)
   let cellW = 0
   for (let c = tlCol + 1; c <= brCol; c++) {
-    cellW += Math.round(((ps.getColumn(c) as any).width ?? 8.43) * 7 + 5)
+    const w = ((ps.getColumn(c) as any).width ?? firstColWidth)
+    cellW += Math.round(w * 7 + 5)
   }
   let cellH = 0
   for (let r = tlRow + 1; r <= brRow; r++) {
