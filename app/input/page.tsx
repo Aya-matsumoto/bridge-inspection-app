@@ -44,8 +44,10 @@ export default function InputPage() {
     mainOffice: '',
     routeNo: '',
     bridgeName: '',
+    spanNo: '',
     damageType: '',
     location: '',
+    elementNo: '',
     discoveryDate: '',
     notes: '',
   })
@@ -300,21 +302,23 @@ export default function InputPage() {
         {/* ── Excel表形式 入力テーブル ── */}
         <div className="bg-white shadow rounded overflow-hidden mb-4">
           <div className="overflow-x-auto">
-            <table style={{ borderCollapse: 'collapse', width: '100%', minWidth: '720px' }}>
+            <table style={{ borderCollapse: 'collapse', width: '100%', minWidth: '860px' }}>
               <colgroup>
                 <col style={{ width: '90px' }} />
                 <col style={{ width: '110px' }} />
                 <col style={{ width: '60px' }} />
-                <col style={{ width: '150px' }} />
-                <col style={{ width: '170px' }} />
                 <col style={{ width: '130px' }} />
-                <col style={{ width: '115px' }} />
+                <col style={{ width: '80px' }} />
+                <col style={{ width: '150px' }} />
+                <col style={{ width: '120px' }} />
+                <col style={{ width: '80px' }} />
                 <col style={{ width: '110px' }} />
+                <col style={{ width: '100px' }} />
               </colgroup>
               <thead>
                 {/* タイトル行 */}
                 <tr style={{ height: '28px', background: '#f0f4f8' }}>
-                  <th colSpan={8} style={{ ...th, fontSize: '12px', background: '#f0f4f8', letterSpacing: '0.02em' }}>
+                  <th colSpan={10} style={{ ...th, fontSize: '12px', background: '#f0f4f8', letterSpacing: '0.02em' }}>
                     {TITLE}
                   </th>
                 </tr>
@@ -324,13 +328,15 @@ export default function InputPage() {
                   <th rowSpan={2} style={{ ...th, background: '#dce6f1' }}>担当<br />出張所名</th>
                   <th rowSpan={2} style={{ ...th, background: '#dce6f1' }}>号線</th>
                   <th rowSpan={2} style={{ ...th, background: '#fde9d9' }}>橋梁名</th>
-                  <th colSpan={3} style={{ ...th, background: '#dce6f1', fontWeight: 'bold' }}>損傷・変状</th>
+                  <th colSpan={5} style={{ ...th, background: '#dce6f1', fontWeight: 'bold' }}>損傷・変状</th>
                   <th rowSpan={2} style={{ ...th, background: '#dce6f1' }}>備考<br />(写真No.等)</th>
                 </tr>
                 {/* 中ヘッダー */}
                 <tr style={{ height: '30px' }}>
+                  <th style={{ ...th, background: '#dce6f1' }}>径間番号</th>
                   <th style={{ ...th, background: '#dce6f1' }}>損傷種別・内容</th>
                   <th style={{ ...th, background: '#dce6f1' }}>位置<br />(部材・部位)</th>
+                  <th style={{ ...th, background: '#dce6f1' }}>要素番号</th>
                   <th style={{ ...th, background: '#dce6f1' }}>発見日</th>
                 </tr>
               </thead>
@@ -362,6 +368,13 @@ export default function InputPage() {
                       onChange={e => setFormData(prev => ({ ...prev, bridgeName: e.target.value }))}
                       className={inputClass('bridgeName')} placeholder="○○橋" />
                   </td>
+                  {/* 径間番号 */}
+                  <td style={td}>
+                    <input type="text" value={formData.spanNo}
+                      onChange={e => setFormData(prev => ({ ...prev, spanNo: e.target.value }))}
+                      className="w-full border-0 p-1 text-sm focus:outline-none focus:ring-1 focus:ring-blue-400 bg-white"
+                      placeholder="例: A1" />
+                  </td>
                   {/* 損傷種別 */}
                   <td style={td}>
                     <input type="text" value={formData.damageType}
@@ -373,6 +386,13 @@ export default function InputPage() {
                     <input type="text" value={formData.location}
                       onChange={e => setFormData(prev => ({ ...prev, location: e.target.value }))}
                       className={inputClass('location')} placeholder="例: 路面" />
+                  </td>
+                  {/* 要素番号 */}
+                  <td style={td}>
+                    <input type="text" value={formData.elementNo}
+                      onChange={e => setFormData(prev => ({ ...prev, elementNo: e.target.value }))}
+                      className="w-full border-0 p-1 text-sm focus:outline-none focus:ring-1 focus:ring-blue-400 bg-white"
+                      placeholder="例: G1" />
                   </td>
                   {/* 発見日 */}
                   <td style={td}>

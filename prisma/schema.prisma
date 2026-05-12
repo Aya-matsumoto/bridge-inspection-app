@@ -14,8 +14,10 @@ model InspectionRecord {
   subOffice       String
   routeNo         Int
   bridgeName      String
+  spanNo          String?
   damageType      String
   location        String
+  elementNo       String?
   discoveryDate   DateTime
   measureStatus   String
   measureDate     DateTime?

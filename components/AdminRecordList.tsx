@@ -18,8 +18,10 @@ interface Record {
   mainOffice: string
   routeNo: number
   bridgeName: string
+  spanNo: string | null
   damageType: string
   location: string
+  elementNo: string | null
   discoveryDate: string | Date
   notes: string | null
   status: string
@@ -87,8 +89,10 @@ export default function AdminRecordList({ initialRecords, offices }: Props) {
       mainOffice: record.mainOffice,
       routeNo: record.routeNo,
       bridgeName: record.bridgeName,
+      spanNo: record.spanNo,
       damageType: record.damageType,
       location: record.location,
+      elementNo: record.elementNo,
       discoveryDate: record.discoveryDate,
       notes: record.notes,
     })
@@ -455,6 +459,13 @@ export default function AdminRecordList({ initialRecords, offices }: Props) {
                   className="w-full border border-gray-300 rounded p-2 text-sm" />
               </div>
               <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">径間番号</label>
+                <input type="text" value={editForm.spanNo || ''}
+                  onChange={e => setEditForm(prev => ({ ...prev, spanNo: e.target.value }))}
+                  className="w-full border border-gray-300 rounded p-2 text-sm"
+                  placeholder="例: A1" />
+              </div>
+              <div>
                 <label className="block text-xs font-medium text-gray-700 mb-1">損傷種別・内容</label>
                 <input type="text" value={editForm.damageType || ''}
                   onChange={e => setEditForm(prev => ({ ...prev, damageType: e.target.value }))}
@@ -465,6 +476,13 @@ export default function AdminRecordList({ initialRecords, offices }: Props) {
                 <input type="text" value={editForm.location || ''}
                   onChange={e => setEditForm(prev => ({ ...prev, location: e.target.value }))}
                   className="w-full border border-gray-300 rounded p-2 text-sm" />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">要素番号</label>
+                <input type="text" value={editForm.elementNo || ''}
+                  onChange={e => setEditForm(prev => ({ ...prev, elementNo: e.target.value }))}
+                  className="w-full border border-gray-300 rounded p-2 text-sm"
+                  placeholder="例: G1" />
               </div>
               <div>
                 <label className="block text-xs font-medium text-gray-700 mb-1">発見日</label>

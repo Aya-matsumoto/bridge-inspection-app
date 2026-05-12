@@ -125,13 +125,17 @@ function placeImageFit(
 
 // ─────────────────────────────────────────────────────────────
 // 写真シートにレコードデータ・画像を書き込む（全シート共通）
+// 新テンプレート（列A-E、5列構成）対応
 // ─────────────────────────────────────────────────────────────
 async function fillPhotoSheet(
   workbook: ExcelJS.Workbook,
   ps: ExcelJS.Worksheet,
   record: {
     bridgeName: string
+    spanNo?: string | null
     damageType: string
+    location?: string
+    elementNo?: string | null
     discoveryDate: Date | string
     photos: { type: string; filePath: string }[]
   },
@@ -139,14 +143,28 @@ async function fillPhotoSheet(
 ) {
   const discoveryDate = new Date(record.discoveryDate)
 
-  // D1: 通し番号
-  ps.getCell('D1').value = sheetNum
-  // B1: 橋梁名
-  ps.getCell('B1').value = record.bridgeName
-  // B2: 損傷種別
-  ps.getCell('B2').value = record.damageType
-  // A6: 撮影日
+  // 列幅を明示的に設定（テンプレートの範囲定義をExcelJSが正しく読めない場合の対策）
+  ps.getColumn(1).width = 11.109375   // A
+  ps.getColumn(2).width = 11.109375   // B
+  ps.getColumn(3).width = 21.77734375 // C
+  ps.getColumn(4).width = 21.77734375 // D
+  ps.getColumn(5).width = 21.77734375 // E
+
+  // C1: 橋梁名
+  ps.getCell('C1').value = record.bridgeName
+  // D2: 通し番号
+  ps.getCell('D2').value = sheetNum
+  // C2: 損傷種別
+  ps.getCell('C2').value = record.damageType
+  // A6: 撮影日（A6:C6 マージ）
   ps.getCell('A6').value = `${formatJpDate(discoveryDate)}撮影`
+
+  // 径間番号・要素番号（B8:C8 と B10:C10 に記入）
+  const spanElem = [record.spanNo, record.elementNo].filter(Boolean).join('　')
+  if (spanElem) {
+    ps.getCell('B8').value  = spanElem
+    ps.getCell('B10').value = spanElem
+  }
 
   // ── 画像を埋め込む共通処理 ──
   async function embedImage(
@@ -164,39 +182,18 @@ async function fillPhotoSheet(
     placeImageFit(ps, imgId, buf, ext, tlCol, tlRow, brCol, brRow)
   }
 
-  // A4: 位置図（A4:D4 → tlCol=0,tlRow=3,brCol=4,brRow=4）
+  // 位置図: A4:E4 → tlCol=0, tlRow=3, brCol=5, brRow=4
   const positionPhoto = record.photos.find(p => p.type === 'position')
   if (positionPhoto) {
-    ps.getCell('A4').value = ''
-    await embedImage(positionPhoto.filePath, 0, 3, 4, 4)
+    await embedImage(positionPhoto.filePath, 0, 3, 5, 4)
   }
 
-  // 点検時写真・措置後写真
-  const inspPhotos  = record.photos.filter(p => p.type === 'inspection')
-  const afterPhotos = record.photos.filter(p => p.type === 'after')
-
-  async function embed(photos: typeof inspPhotos, index: number,
-    tlCol: number, tlRow: number, brCol: number, brRow: number) {
-    if (!photos[index]) return
-    await embedImage(photos[index].filePath, tlCol, tlRow, brCol, brRow)
-  }
-
-  await embed(inspPhotos,  0, 0, 6, 2, 7)
-  await embed(afterPhotos, 0, 2, 6, 4, 7)
-  await embed(inspPhotos,  1, 0, 7, 2, 8)
-  await embed(afterPhotos, 1, 2, 7, 4, 8)
-
-  // 3枚目以降の写真は追加行に配置
-  const maxExtra = Math.max(inspPhotos.length, afterPhotos.length) - 2
-  for (let j = 0; j < maxExtra; j++) {
-    const extraRow = 9 + j * 2
-    ps.getRow(extraRow).height     = 21.0
-    ps.getRow(extraRow + 1).height = 187.5
-    try { ps.mergeCells(extraRow + 1, 1, extraRow + 1, 2) } catch { /* 既存結合 */ }
-    try { ps.mergeCells(extraRow + 1, 3, extraRow + 1, 4) } catch { /* 既存結合 */ }
-    await embed(inspPhotos,  2 + j, 0, extraRow, 2, extraRow + 1)
-    await embed(afterPhotos, 2 + j, 2, extraRow, 4, extraRow + 1)
-  }
+  // 点検時写真（左側 A-C 列）
+  // 全景: A7:C7 → tlCol=0, tlRow=6, brCol=3, brRow=7
+  // 近景: A9:C9 → tlCol=0, tlRow=8, brCol=3, brRow=9
+  const inspPhotos = record.photos.filter(p => p.type === 'inspection')
+  if (inspPhotos[0]) await embedImage(inspPhotos[0].filePath, 0, 6, 3, 7)
+  if (inspPhotos[1]) await embedImage(inspPhotos[1].filePath, 0, 8, 3, 9)
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -246,17 +243,19 @@ export async function GET(req: NextRequest) {
     const measureDate   = record.measureDate ? new Date(record.measureDate) : null
 
     const values: [number, ExcelJS.CellValue][] = [
-      [1,  record.mainOffice],
-      [2,  record.subOffice],
-      [3,  record.routeNo],
-      [4,  record.bridgeName],
-      [5,  record.damageType],
-      [6,  record.location],
-      [7,  formatJpDate(discoveryDate)],
-      [8,  record.measureStatus || ''],
-      [9,  measureDate ? formatJpDate(measureDate) : ''],
-      [10, record.measurePlan || ''],
-      [11, i + 1],
+      [1,  record.mainOffice],          // A: 担当事務所名
+      [2,  record.subOffice],           // B: 担当出張所名
+      [3,  record.routeNo],             // C: 号線
+      [4,  record.bridgeName],          // D: 橋梁名
+      [5,  (record as any).spanNo || ''],    // E: 径間番号
+      [6,  record.damageType],          // F: 損傷種別・内容
+      [7,  record.location],            // G: 位置（部材・部位）
+      [8,  (record as any).elementNo || ''], // H: 要素番号
+      [9,  formatJpDate(discoveryDate)],// I: 発見日
+      [10, record.measureStatus || ''], // J: 措置状況
+      [11, measureDate ? formatJpDate(measureDate) : ''], // K: 措置日
+      [12, record.measurePlan || ''],   // L: 措置予定
+      [13, record.notes || `(${i + 1})`], // M: 備考・写真No
     ]
 
     values.forEach(([col, val]) => {
