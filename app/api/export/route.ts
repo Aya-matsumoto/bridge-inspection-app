@@ -82,7 +82,32 @@ function getCellAreaPx(
   return { cellW, cellH }
 }
 
+// ピクセル終端位置を 0-indexed の小数 col/row に変換（twoCellAnchor の br 計算用）
+// tlCol/tlRow は 0-indexed、c1/r1 は 1-indexed で getColumn/getRow に渡す
+function calcBrCol(ps: ExcelJS.Worksheet, tlCol: number, xEndPx: number, maxBrCol: number): number {
+  const firstColWidth = ((ps.getColumn(tlCol + 1) as any).width ?? 8.43)
+  let remain = xEndPx
+  for (let c1 = tlCol + 1; c1 <= maxBrCol; c1++) {
+    const w = ((ps.getColumn(c1) as any).width ?? firstColWidth)
+    const colPx = Math.round(w * 7 + 5)
+    if (remain <= colPx) return (c1 - 1) + remain / colPx
+    remain -= colPx
+  }
+  return maxBrCol
+}
+
+function calcBrRow(ps: ExcelJS.Worksheet, tlRow: number, yEndPx: number, maxBrRow: number): number {
+  let remain = yEndPx
+  for (let r1 = tlRow + 1; r1 <= maxBrRow; r1++) {
+    const rowPx = Math.round(((ps.getRow(r1) as any).height ?? 15) * 96 / 72)
+    if (remain <= rowPx) return (r1 - 1) + remain / rowPx
+    remain -= rowPx
+  }
+  return maxBrRow
+}
+
 // 縦横比を保ちながらセルの 98% に収めて中央配置
+// twoCellAnchor + editAs:"absolute" = セルに合わせて移動・サイズ変更しない
 function placeImageFit(
   ps: ExcelJS.Worksheet,
   imgId: number,
@@ -105,17 +130,20 @@ function placeImageFit(
     const xOffPx = (cellW - scaledW) / 2
     const yOffPx = (cellH - scaledH) / 2
 
-    // 先頭の列・行のピクセルサイズで割って小数の col/row 位置に変換
-    // ExcelJS は tl.col / tl.row に小数を渡すことで列・行内の位置を指定できる
+    // tl: 先頭列・行のピクセルサイズで割って小数の col/row 位置に変換
     const firstColPx = Math.round(((ps.getColumn(tlCol + 1) as any).width ?? 8.43) * 7 + 5)
     const firstRowPx = Math.round(((ps.getRow(tlRow + 1) as any).height ?? 15) * 96 / 72)
 
+    // br: 画像の終端ピクセルを col/row に変換（twoCellAnchor 用）
     ps.addImage(imgId, {
       tl: {
         col: tlCol + xOffPx / firstColPx,
         row: tlRow + yOffPx / firstRowPx,
       },
-      ext: { width: scaledW, height: scaledH },
+      br: {
+        col: calcBrCol(ps, tlCol, xOffPx + scaledW, brCol),
+        row: calcBrRow(ps, tlRow, yOffPx + scaledH, brRow),
+      },
       editAs: 'absolute',
     } as any)
   } else {
