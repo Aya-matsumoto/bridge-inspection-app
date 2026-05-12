@@ -116,10 +116,11 @@ function placeImageFit(
         row: tlRow + yOffPx / firstRowPx,
       },
       ext: { width: scaledW, height: scaledH },
+      editAs: 'absolute',
     } as any)
   } else {
     // 画像サイズ取得失敗時のフォールバック
-    ps.addImage(imgId, { tl: { col: tlCol, row: tlRow }, br: { col: brCol, row: brRow } } as any)
+    ps.addImage(imgId, { tl: { col: tlCol, row: tlRow }, br: { col: brCol, row: brRow }, editAs: 'absolute' } as any)
   }
 }
 
