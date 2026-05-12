@@ -159,11 +159,16 @@ async function fillPhotoSheet(
   // A6: 撮影日（A6:C6 マージ）
   ps.getCell('A6').value = `${formatJpDate(discoveryDate)}撮影`
 
-  // 径間番号・要素番号（B8:C8 と B10:C10 に記入）
+  // 点検時写真を先に取得（径間番号・要素番号の条件判定に使用）
+  const inspPhotos = record.photos.filter(p => p.type === 'inspection')
+
+  // 径間番号・要素番号（B8 は常に記入、B10 は写真2枚目がある場合のみ）
   const spanElem = [record.spanNo, record.elementNo].filter(Boolean).join('　')
   if (spanElem) {
-    ps.getCell('B8').value  = spanElem
-    ps.getCell('B10').value = spanElem
+    ps.getCell('B8').value = spanElem
+    if (inspPhotos.length >= 2) {
+      ps.getCell('B10').value = spanElem
+    }
   }
 
   // ── 画像を埋め込む共通処理 ──
@@ -191,7 +196,6 @@ async function fillPhotoSheet(
   // 点検時写真（左側 A-C 列）
   // 全景: A7:C7 → tlCol=0, tlRow=6, brCol=3, brRow=7
   // 近景: A9:C9 → tlCol=0, tlRow=8, brCol=3, brRow=9
-  const inspPhotos = record.photos.filter(p => p.type === 'inspection')
   if (inspPhotos[0]) await embedImage(inspPhotos[0].filePath, 0, 6, 3, 7)
   if (inspPhotos[1]) await embedImage(inspPhotos[1].filePath, 0, 8, 3, 9)
 }
@@ -235,6 +239,13 @@ export async function GET(req: NextRequest) {
 
   // Sheet1（記録表）を取得
   const ws = workbook.getWorksheet('Sheet1') ?? workbook.worksheets[0]
+
+  // テンプレートの例示行（5・6行目）をクリア
+  ;[5, 6].forEach(rowNum => {
+    ws.getRow(rowNum).eachCell({ includeEmpty: false }, cell => {
+      cell.value = null
+    })
+  })
 
   // ── Sheet1 にデータを書き込む（行5〜） ──
   records.forEach((record, i) => {
