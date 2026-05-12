@@ -82,32 +82,8 @@ function getCellAreaPx(
   return { cellW, cellH }
 }
 
-// ピクセル終端位置を 0-indexed の小数 col/row に変換（twoCellAnchor の br 計算用）
-// tlCol/tlRow は 0-indexed、c1/r1 は 1-indexed で getColumn/getRow に渡す
-function calcBrCol(ps: ExcelJS.Worksheet, tlCol: number, xEndPx: number, maxBrCol: number): number {
-  const firstColWidth = ((ps.getColumn(tlCol + 1) as any).width ?? 8.43)
-  let remain = xEndPx
-  for (let c1 = tlCol + 1; c1 <= maxBrCol; c1++) {
-    const w = ((ps.getColumn(c1) as any).width ?? firstColWidth)
-    const colPx = Math.round(w * 7 + 5)
-    if (remain <= colPx) return (c1 - 1) + remain / colPx
-    remain -= colPx
-  }
-  return maxBrCol
-}
-
-function calcBrRow(ps: ExcelJS.Worksheet, tlRow: number, yEndPx: number, maxBrRow: number): number {
-  let remain = yEndPx
-  for (let r1 = tlRow + 1; r1 <= maxBrRow; r1++) {
-    const rowPx = Math.round(((ps.getRow(r1) as any).height ?? 15) * 96 / 72)
-    if (remain <= rowPx) return (r1 - 1) + remain / rowPx
-    remain -= rowPx
-  }
-  return maxBrRow
-}
-
-// 縦横比を保ちながらセルの 98% に収めて中央配置
-// twoCellAnchor + editAs:"absolute" = セルに合わせて移動・サイズ変更しない
+// 縦横比を保ちながらセルの 98% に収めて中央配置（{ tl, ext } 形式で正確なサイズを指定）
+// editAs:"absolute" は後段の fixImageAnchors() で ZIP レベルで付与する
 function placeImageFit(
   ps: ExcelJS.Worksheet,
   imgId: number,
@@ -130,26 +106,126 @@ function placeImageFit(
     const xOffPx = (cellW - scaledW) / 2
     const yOffPx = (cellH - scaledH) / 2
 
-    // tl: 先頭列・行のピクセルサイズで割って小数の col/row 位置に変換
+    // 先頭の列・行のピクセルサイズで割って小数の col/row 位置に変換
     const firstColPx = Math.round(((ps.getColumn(tlCol + 1) as any).width ?? 8.43) * 7 + 5)
     const firstRowPx = Math.round(((ps.getRow(tlRow + 1) as any).height ?? 15) * 96 / 72)
 
-    // br: 画像の終端ピクセルを col/row に変換（twoCellAnchor 用）
     ps.addImage(imgId, {
       tl: {
         col: tlCol + xOffPx / firstColPx,
         row: tlRow + yOffPx / firstRowPx,
       },
-      br: {
-        col: calcBrCol(ps, tlCol, xOffPx + scaledW, brCol),
-        row: calcBrRow(ps, tlRow, yOffPx + scaledH, brRow),
-      },
-      editAs: 'absolute',
+      ext: { width: scaledW, height: scaledH },
     } as any)
   } else {
     // 画像サイズ取得失敗時のフォールバック
-    ps.addImage(imgId, { tl: { col: tlCol, row: tlRow }, br: { col: brCol, row: brRow }, editAs: 'absolute' } as any)
+    ps.addImage(imgId, { tl: { col: tlCol, row: tlRow }, br: { col: brCol, row: brRow } } as any)
   }
+}
+
+// ─────────────────────────────────────────────────────────────
+// ZIP後処理：oneCellAnchor → twoCellAnchor editAs="absolute"
+// ExcelJS が生成した { tl, ext } 形式（oneCellAnchor）は editAs が無効なため、
+// バッファ生成後に ZIP 内のドローイング XML を直接書き換える
+// ─────────────────────────────────────────────────────────────
+async function fixImageAnchors(xlsxBuf: ArrayBuffer): Promise<Buffer> {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const JSZip = require('jszip')
+  const zip = await JSZip.loadAsync(xlsxBuf)
+
+  // ── シートと対応するドローイングのマッピングを _rels から取得 ──
+  const drawToSheet = new Map<string, string>()
+  for (const [name] of Object.entries(zip.files)) {
+    const m = (name as string).match(/xl\/worksheets\/_rels\/sheet(\d+)\.xml\.rels$/)
+    if (!m) continue
+    const relsXml = await zip.files[name].async('string')
+    const dm = relsXml.match(/Target="\.\.\/drawings\/drawing(\d+)\.xml"/)
+    if (dm) {
+      drawToSheet.set(`xl/drawings/drawing${dm[1]}.xml`, `xl/worksheets/sheet${m[1]}.xml`)
+    }
+  }
+
+  const DEFAULT_COL_EMU = Math.round(8.43 * 66675)   // デフォルト列幅 EMU
+  const DEFAULT_ROW_EMU = Math.round(15  * 12700)    // デフォルト行高 EMU
+
+  for (const [drawPath, wsPath] of drawToSheet) {
+    if (!zip.files[drawPath] || !zip.files[wsPath]) continue
+
+    // ── ワークシートから列幅・行高を EMU で取得 ──
+    const wsXml = await zip.files[wsPath].async('string')
+    const colEMUs = new Map<number, number>()
+    const rowEMUs = new Map<number, number>()
+
+    // <col> 要素（属性順不問）
+    for (const m of wsXml.matchAll(/<col\b([^/]*?)\/>/g)) {
+      const a = m[1]
+      const minM = a.match(/min="(\d+)"/)
+      const maxM = a.match(/max="(\d+)"/)
+      const wM   = a.match(/width="([^"]+)"/)
+      if (minM && maxM && wM) {
+        const emu = Math.round(parseFloat(wM[1]) * 66675)  // charWidth × 9525 × 7
+        for (let c = parseInt(minM[1]) - 1; c < parseInt(maxM[1]); c++) colEMUs.set(c, emu)
+      }
+    }
+    // <row> 要素（ht 属性がある行のみ）
+    for (const m of wsXml.matchAll(/<row\b([^>]*?)>/g)) {
+      const a = m[1]
+      const rM  = a.match(/\br="(\d+)"/)
+      const htM = a.match(/\bht="([^"]+)"/)
+      if (rM && htM) rowEMUs.set(parseInt(rM[1]) - 1, Math.round(parseFloat(htM[1]) * 12700))
+    }
+
+    const getColEMU = (c: number) => colEMUs.get(c) ?? DEFAULT_COL_EMU
+    const getRowEMU = (r: number) => rowEMUs.get(r) ?? DEFAULT_ROW_EMU
+
+    // EMU 加算で to-アンカーを計算（セル境界を越えながら進む）
+    function addEMU(idx: number, off: number, delta: number, getSize: (i: number) => number): [number, number] {
+      let remain = off + delta
+      let i = idx
+      for (let guard = 0; guard < 200 && remain >= getSize(i); guard++) {
+        remain -= getSize(i)
+        i++
+      }
+      return [i, Math.round(remain)]
+    }
+
+    // ── ドローイング XML を書き換え ──
+    const drawXml = await zip.files[drawPath].async('string')
+
+    const newDrawXml = drawXml.replace(
+      /<xdr:oneCellAnchor>([\s\S]*?)<\/xdr:oneCellAnchor>/g,
+      (_, inner) => {
+        // <xdr:from> をパース
+        const fromM = inner.match(
+          /<xdr:from>\s*<xdr:col>(\d+)<\/xdr:col>\s*<xdr:colOff>(\d+)<\/xdr:colOff>\s*<xdr:row>(\d+)<\/xdr:row>\s*<xdr:rowOff>(\d+)<\/xdr:rowOff>\s*<\/xdr:from>/
+        )
+        // <xdr:ext> をパース（cx/cy は EMU）
+        const extM = inner.match(/<xdr:ext\s+cx="(\d+)"\s+cy="(\d+)"/)
+
+        if (!fromM || !extM) return `<xdr:oneCellAnchor>${inner}</xdr:oneCellAnchor>` // パース失敗は変更しない
+
+        const [fromCol, fromColOff, fromRow, fromRowOff] = [parseInt(fromM[1]), parseInt(fromM[2]), parseInt(fromM[3]), parseInt(fromM[4])]
+        const [cx, cy] = [parseInt(extM[1]), parseInt(extM[2])]
+
+        const [toCol, toColOff] = addEMU(fromCol, fromColOff, cx, getColEMU)
+        const [toRow, toRowOff] = addEMU(fromRow, fromRowOff, cy, getRowEMU)
+
+        const fromEl = inner.match(/(<xdr:from>[\s\S]*?<\/xdr:from>)/)[1]
+        const picEl  = inner.match(/(<xdr:pic>[\s\S]*?<\/xdr:pic>)/)[1]
+
+        return `<xdr:twoCellAnchor xdr:editAs="absolute">` +
+          fromEl +
+          `<xdr:to><xdr:col>${toCol}</xdr:col><xdr:colOff>${toColOff}</xdr:colOff>` +
+          `<xdr:row>${toRow}</xdr:row><xdr:rowOff>${toRowOff}</xdr:rowOff></xdr:to>` +
+          picEl +
+          `<xdr:clientData/></xdr:twoCellAnchor>`
+      }
+    )
+
+    zip.file(drawPath, newDrawXml)
+  }
+
+  return zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE' })
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -328,12 +404,14 @@ export async function GET(req: NextRequest) {
   if (sheet3) workbook.removeWorksheet(sheet3.id)
 
   // ── 出力 ──
-  const buffer   = await workbook.xlsx.writeBuffer()
+  // ExcelJS のバッファを生成後、ZIP レベルで画像を絶対位置固定に書き換える
+  const rawBuffer = await workbook.xlsx.writeBuffer()
+  const buffer    = await fixImageAnchors(rawBuffer)
   const fileName = encodeURIComponent(
     `維持作業対応(対策区分Ｍ相当)損傷・変状の措置状況　記録表_${office}_${year}年${month}月分.xlsx`
   )
 
-  return new NextResponse(buffer as ArrayBuffer, {
+  return new NextResponse(buffer as unknown as ArrayBuffer, {
     headers: {
       'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
       'Content-Disposition': `attachment; filename*=UTF-8''${fileName}`,
