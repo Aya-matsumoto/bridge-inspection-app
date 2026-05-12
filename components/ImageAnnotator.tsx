@@ -452,7 +452,16 @@ export default function ImageAnnotator({ imageFile, onSave, onCancel }: Props) {
 
   function handleSave() {
     const canvas = canvasRef.current
-    if (!canvas) return
+    const img    = imgRef.current
+    if (!canvas || !img) return
+
+    // 保存前に「選択枠なし」で再描画してから blob を取得する
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return
+    ctx.clearRect(0, 0, canvas.width, canvas.height)
+    ctx.drawImage(img, 0, 0, canvas.width, canvas.height)
+    shapes.forEach(s => drawShape(ctx, s))  // 選択ハンドルは描かない
+
     canvas.toBlob(blob => { if (blob) onSave(blob) }, 'image/png', 0.95)
   }
 
