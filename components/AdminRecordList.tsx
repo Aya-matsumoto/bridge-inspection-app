@@ -463,7 +463,7 @@ export default function AdminRecordList({ initialRecords, offices }: Props) {
                 <input type="text" value={editForm.spanNo || ''}
                   onChange={e => setEditForm(prev => ({ ...prev, spanNo: e.target.value }))}
                   className="w-full border border-gray-300 rounded p-2 text-sm"
-                  placeholder="例: A1" />
+                  placeholder="例: 1" />
               </div>
               <div>
                 <label className="block text-xs font-medium text-gray-700 mb-1">損傷種別・内容</label>
@@ -482,7 +482,7 @@ export default function AdminRecordList({ initialRecords, offices }: Props) {
                 <input type="text" value={editForm.elementNo || ''}
                   onChange={e => setEditForm(prev => ({ ...prev, elementNo: e.target.value }))}
                   className="w-full border border-gray-300 rounded p-2 text-sm"
-                  placeholder="例: G1" />
+                  placeholder="例: 0101" />
               </div>
               <div>
                 <label className="block text-xs font-medium text-gray-700 mb-1">発見日</label>

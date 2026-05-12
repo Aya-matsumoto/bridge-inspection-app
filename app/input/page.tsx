@@ -373,7 +373,7 @@ export default function InputPage() {
                     <input type="text" value={formData.spanNo}
                       onChange={e => setFormData(prev => ({ ...prev, spanNo: e.target.value }))}
                       className="w-full border-0 p-1 text-sm focus:outline-none focus:ring-1 focus:ring-blue-400 bg-white"
-                      placeholder="例: A1" />
+                      placeholder="例: 1" />
                   </td>
                   {/* 損傷種別 */}
                   <td style={td}>
@@ -392,7 +392,7 @@ export default function InputPage() {
                     <input type="text" value={formData.elementNo}
                       onChange={e => setFormData(prev => ({ ...prev, elementNo: e.target.value }))}
                       className="w-full border-0 p-1 text-sm focus:outline-none focus:ring-1 focus:ring-blue-400 bg-white"
-                      placeholder="例: G1" />
+                      placeholder="例: 0101" />
                   </td>
                   {/* 発見日 */}
                   <td style={td}>
