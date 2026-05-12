@@ -152,8 +152,8 @@ async function fillPhotoSheet(
 
   // C1: 橋梁名
   ps.getCell('C1').value = record.bridgeName
-  // D2: 通し番号
-  ps.getCell('D2').value = sheetNum
+  // E1: 通し番号
+  ps.getCell('E1').value = sheetNum
   // C2: 損傷種別
   ps.getCell('C2').value = record.damageType
   // A6: 撮影日（A6:C6 マージ）
@@ -255,7 +255,7 @@ export async function GET(req: NextRequest) {
       [10, record.measureStatus || ''], // J: 措置状況
       [11, measureDate ? formatJpDate(measureDate) : ''], // K: 措置日
       [12, record.measurePlan || ''],   // L: 措置予定
-      [13, record.notes || `(${i + 1})`], // M: 備考・写真No
+      [13, record.notes || String(i + 1)],  // M: 備考・写真No（通し番号のみ）
     ]
 
     values.forEach(([col, val]) => {
@@ -282,6 +282,10 @@ export async function GET(req: NextRequest) {
     const sheet = workbook.getWorksheet(`(${i + 1})`)
     if (sheet) workbook.removeWorksheet(sheet.id)
   }
+
+  // Sheet3（補助シート）を削除
+  const sheet3 = workbook.getWorksheet('Sheet3')
+  if (sheet3) workbook.removeWorksheet(sheet3.id)
 
   // ── 出力 ──
   const buffer   = await workbook.xlsx.writeBuffer()
