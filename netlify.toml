@@ -1,0 +1,5 @@
+[build]
+  command = "npx prisma db push && npx tsx prisma/seed.ts && next build"
+
+[functions]
+  directory = "netlify/functions"
