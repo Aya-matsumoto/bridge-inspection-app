@@ -62,24 +62,48 @@ function getImageSize(buf: Buffer, ext: string): { w: number; h: number } | null
 }
 
 // セル範囲のピクセルサイズを計算（addImage の 0-indexed 座標を受け取る）
+// 列幅は ExcelJS 内部と同じ w*7 換算を使用（+5 なし）
 function getCellAreaPx(
   ps: ExcelJS.Worksheet,
   tlCol: number, tlRow: number,
   brCol: number, brRow: number
 ): { cellW: number; cellH: number } {
-  // 最初の列の幅を基準値として取得（テンプレートで複数列が同じ幅で定義されている場合、
-  // ExcelJS が 2列目以降の幅を undefined で返すことがあるため）
   const firstColWidth = ((ps.getColumn(tlCol + 1) as any).width ?? 8.43)
   let cellW = 0
   for (let c = tlCol + 1; c <= brCol; c++) {
     const w = ((ps.getColumn(c) as any).width ?? firstColWidth)
-    cellW += Math.round(w * 7 + 5)
+    cellW += w * 7   // ExcelJS 内部式に合わせる（w * 9525 * 7 EMU → px 換算）
   }
   let cellH = 0
   for (let r = tlRow + 1; r <= brRow; r++) {
-    cellH += Math.round(((ps.getRow(r) as any).height ?? 15) * 96 / 72)
+    cellH += ((ps.getRow(r) as any).height ?? 15) * 96 / 72
   }
   return { cellW, cellH }
+}
+
+// ピクセルオフセット → ExcelJS の小数 col 位置に変換
+// xPx が複数列にまたがる場合も正確に処理する（centering に使用）
+function pxToColFrac(ps: ExcelJS.Worksheet, tlCol: number, xPx: number, maxCol: number): number {
+  const firstColWidth = ((ps.getColumn(tlCol + 1) as any).width ?? 8.43)
+  let remain = xPx
+  for (let c1 = tlCol + 1; c1 <= maxCol; c1++) {
+    const w = ((ps.getColumn(c1) as any).width ?? firstColWidth)
+    const colPx = w * 7
+    if (remain <= colPx) return (c1 - 1) + remain / colPx
+    remain -= colPx
+  }
+  return maxCol
+}
+
+// ピクセルオフセット → ExcelJS の小数 row 位置に変換
+function pxToRowFrac(ps: ExcelJS.Worksheet, tlRow: number, yPx: number, maxRow: number): number {
+  let remain = yPx
+  for (let r1 = tlRow + 1; r1 <= maxRow; r1++) {
+    const rowPx = ((ps.getRow(r1) as any).height ?? 15) * 96 / 72
+    if (remain <= rowPx) return (r1 - 1) + remain / rowPx
+    remain -= rowPx
+  }
+  return maxRow
 }
 
 // 縦横比を保ちながらセルの 98% に収めて中央配置（{ tl, ext } 形式で正確なサイズを指定）
@@ -106,14 +130,11 @@ function placeImageFit(
     const xOffPx = (cellW - scaledW) / 2
     const yOffPx = (cellH - scaledH) / 2
 
-    // 先頭の列・行のピクセルサイズで割って小数の col/row 位置に変換
-    const firstColPx = Math.round(((ps.getColumn(tlCol + 1) as any).width ?? 8.43) * 7 + 5)
-    const firstRowPx = Math.round(((ps.getRow(tlRow + 1) as any).height ?? 15) * 96 / 72)
-
+    // pxToColFrac / pxToRowFrac で複数列をまたぐオフセットを正確に変換
     ps.addImage(imgId, {
       tl: {
-        col: tlCol + xOffPx / firstColPx,
-        row: tlRow + yOffPx / firstRowPx,
+        col: pxToColFrac(ps, tlCol, xOffPx, brCol),
+        row: pxToRowFrac(ps, tlRow, yOffPx, brRow),
       },
       ext: { width: scaledW, height: scaledH },
     } as any)
