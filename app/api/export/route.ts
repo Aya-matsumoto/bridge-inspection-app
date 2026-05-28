@@ -82,25 +82,39 @@ function getCellAreaPx(
 }
 
 // ピクセルオフセット → ExcelJS の小数 col 位置に変換
-// xPx が複数列にまたがる場合も正確に処理する（centering に使用）
+// ExcelJS は tl.col の小数部分を nativeColOff（EMU）に変換する際、
+//   nativeColOff = fraction × Math.floor(w × 10000)  として計算する。
+// nativeColOff がそのまま <xdr:colOff> (EMU) に書き出されるため、
+// 正しい EMU = xOffPx × 9525 になるよう逆算する必要がある：
+//   fraction = xOffPx × 9525 / Math.floor(w × 10000)
 function pxToColFrac(ps: ExcelJS.Worksheet, tlCol: number, xPx: number, maxCol: number): number {
   const firstColWidth = ((ps.getColumn(tlCol + 1) as any).width ?? 8.43)
   let remain = xPx
   for (let c1 = tlCol + 1; c1 <= maxCol; c1++) {
     const w = ((ps.getColumn(c1) as any).width ?? firstColWidth)
-    const colPx = w * 7
-    if (remain <= colPx) return (c1 - 1) + remain / colPx
+    const colPx = w * 7          // 列幅（ピクセル）
+    if (remain <= colPx) {
+      // ExcelJS colWidth = Math.floor(w × 10000) を使って逆算
+      const fraction = (remain * 9525) / Math.floor(w * 10000)
+      return (c1 - 1) + fraction
+    }
     remain -= colPx
   }
   return maxCol
 }
 
 // ピクセルオフセット → ExcelJS の小数 row 位置に変換
+// 同様に nativeRowOff = fraction × Math.floor(h × 10000) から逆算
 function pxToRowFrac(ps: ExcelJS.Worksheet, tlRow: number, yPx: number, maxRow: number): number {
+  const firstH = ((ps.getRow(tlRow + 1) as any).height ?? 15)
   let remain = yPx
   for (let r1 = tlRow + 1; r1 <= maxRow; r1++) {
-    const rowPx = ((ps.getRow(r1) as any).height ?? 15) * 96 / 72
-    if (remain <= rowPx) return (r1 - 1) + remain / rowPx
+    const h = ((ps.getRow(r1) as any).height ?? firstH)
+    const rowPx = h * 96 / 72   // 行高（ピクセル）
+    if (remain <= rowPx) {
+      const fraction = (remain * 9525) / Math.floor(h * 10000)
+      return (r1 - 1) + fraction
+    }
     remain -= rowPx
   }
   return maxRow
