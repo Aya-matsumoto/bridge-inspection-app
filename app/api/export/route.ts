@@ -81,43 +81,39 @@ function getCellAreaPx(
   return { cellW, cellH }
 }
 
-// ピクセルオフセット → ExcelJS の小数 col 位置に変換
-// ExcelJS は tl.col の小数部分を nativeColOff（EMU）に変換する際、
-//   nativeColOff = fraction × Math.floor(w × 10000)  として計算する。
-// nativeColOff がそのまま <xdr:colOff> (EMU) に書き出されるため、
-// 正しい EMU = xOffPx × 9525 になるよう逆算する必要がある：
-//   fraction = xOffPx × 9525 / Math.floor(w × 10000)
-function pxToColFrac(ps: ExcelJS.Worksheet, tlCol: number, xPx: number, maxCol: number): number {
-  const firstColWidth = ((ps.getColumn(tlCol + 1) as any).width ?? 8.43)
-  let remain = xPx
+// ピクセルオフセット → ExcelJS ネイティブアンカー（EMU直接指定）に変換
+// ※ ExcelJS の tl.col 小数変換（set col(v)）は
+//    カスタム幅列で colWidth = Math.floor(w×10000) を使うため
+//    EMU に対して約 1/6.7 倍になるバグがある。
+//    代わりに nativeCol / nativeColOff を直接渡すことで正しい EMU を指定できる。
+//    列EMU = charWidth × 66675（= charWidth × 7px × 9525 EMU/px）
+function getColAnchor(
+  ps: ExcelJS.Worksheet, tlCol: number, xOffPx: number, maxCol: number
+): { nativeCol: number; nativeColOff: number } {
+  const firstW = ((ps.getColumn(tlCol + 1) as any).width ?? 8.43)
+  let remEMU = Math.round(xOffPx * EMU_PER_PX)
   for (let c1 = tlCol + 1; c1 <= maxCol; c1++) {
-    const w = ((ps.getColumn(c1) as any).width ?? firstColWidth)
-    const colPx = w * 7          // 列幅（ピクセル）
-    if (remain <= colPx) {
-      // ExcelJS colWidth = Math.floor(w × 10000) を使って逆算
-      const fraction = (remain * 9525) / Math.floor(w * 10000)
-      return (c1 - 1) + fraction
-    }
-    remain -= colPx
+    const w = ((ps.getColumn(c1) as any).width ?? firstW)
+    const colEMU = Math.round(w * 66675)   // charWidth × 9525 × 7
+    if (remEMU < colEMU) return { nativeCol: c1 - 1, nativeColOff: remEMU }
+    remEMU -= colEMU
   }
-  return maxCol
+  return { nativeCol: maxCol - 1, nativeColOff: 0 }
 }
 
-// ピクセルオフセット → ExcelJS の小数 row 位置に変換
-// 同様に nativeRowOff = fraction × Math.floor(h × 10000) から逆算
-function pxToRowFrac(ps: ExcelJS.Worksheet, tlRow: number, yPx: number, maxRow: number): number {
+// 行オフセット → ネイティブアンカー（行EMU = points × 12700）
+function getRowAnchor(
+  ps: ExcelJS.Worksheet, tlRow: number, yOffPx: number, maxRow: number
+): { nativeRow: number; nativeRowOff: number } {
   const firstH = ((ps.getRow(tlRow + 1) as any).height ?? 15)
-  let remain = yPx
+  let remEMU = Math.round(yOffPx * EMU_PER_PX)
   for (let r1 = tlRow + 1; r1 <= maxRow; r1++) {
     const h = ((ps.getRow(r1) as any).height ?? firstH)
-    const rowPx = h * 96 / 72   // 行高（ピクセル）
-    if (remain <= rowPx) {
-      const fraction = (remain * 9525) / Math.floor(h * 10000)
-      return (r1 - 1) + fraction
-    }
-    remain -= rowPx
+    const rowEMU = Math.round(h * 12700)   // points × 12700 EMU/pt
+    if (remEMU < rowEMU) return { nativeRow: r1 - 1, nativeRowOff: remEMU }
+    remEMU -= rowEMU
   }
-  return maxRow
+  return { nativeRow: maxRow - 1, nativeRowOff: 0 }
 }
 
 // 縦横比を保ちながらセルの 98% に収めて中央配置（{ tl, ext } 形式で正確なサイズを指定）
@@ -144,11 +140,15 @@ function placeImageFit(
     const xOffPx = (cellW - scaledW) / 2
     const yOffPx = (cellH - scaledH) / 2
 
-    // pxToColFrac / pxToRowFrac で複数列をまたぐオフセットを正確に変換
+    // EMU を直接 nativeCol/nativeColOff で指定（ExcelJS の broken な col setter を回避）
+    const colAnchor = getColAnchor(ps, tlCol, xOffPx, brCol)
+    const rowAnchor = getRowAnchor(ps, tlRow, yOffPx, brRow)
     ps.addImage(imgId, {
       tl: {
-        col: pxToColFrac(ps, tlCol, xOffPx, brCol),
-        row: pxToRowFrac(ps, tlRow, yOffPx, brRow),
+        nativeCol: colAnchor.nativeCol,
+        nativeColOff: colAnchor.nativeColOff,
+        nativeRow: rowAnchor.nativeRow,
+        nativeRowOff: rowAnchor.nativeRowOff,
       },
       ext: { width: scaledW, height: scaledH },
     } as any)
