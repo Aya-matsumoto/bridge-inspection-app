@@ -267,8 +267,11 @@ async function fillPhotoSheet(
   // 点検時写真を先に取得（径間番号・要素番号の条件判定に使用）
   const inspPhotos = record.photos.filter(p => p.type === 'inspection')
 
-  // 径間番号・要素番号（B8 は常に記入、B10 は写真2枚目がある場合のみ）
-  const spanElem = [record.spanNo, record.elementNo].filter(Boolean).join('　')
+  // 径間番号・要素番号の表示文字列を組み立て
+  // 例: spanNo="1", location="竪壁", elementNo="0102" → "1径間　竪壁0102"
+  const spanPart  = record.spanNo  ? `${record.spanNo}径間` : ''
+  const elemPart  = [record.location, record.elementNo].filter(Boolean).join('')
+  const spanElem  = [spanPart, elemPart].filter(Boolean).join('　')
   if (spanElem) {
     ps.getCell('B8').value = spanElem
     if (inspPhotos.length >= 2) {
