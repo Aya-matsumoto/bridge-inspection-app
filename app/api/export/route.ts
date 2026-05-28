@@ -143,6 +143,7 @@ function placeImageFit(
     // EMU を直接 nativeCol/nativeColOff で指定（ExcelJS の broken な col setter を回避）
     const colAnchor = getColAnchor(ps, tlCol, xOffPx, brCol)
     const rowAnchor = getRowAnchor(ps, tlRow, yOffPx, brRow)
+    console.log(`[placeImageFit] imgSize=${imgSize.w}x${imgSize.h} scaled=${scaledW}x${scaledH} cell=${Math.round(cellW)}x${Math.round(cellH)} xOff=${Math.round(xOffPx)}px yOff=${Math.round(yOffPx)}px → nativeCol=${colAnchor.nativeCol} colOff=${colAnchor.nativeColOff}EMU nativeRow=${rowAnchor.nativeRow} rowOff=${rowAnchor.nativeRowOff}EMU`)
     ps.addImage(imgId, {
       tl: {
         nativeCol: colAnchor.nativeCol,
