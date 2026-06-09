@@ -1,7 +1,7 @@
 'use client'
 import { useRef, useState, useEffect, useCallback } from 'react'
 
-type DrawTool = 'circle' | 'arrow' | 'text'
+type DrawTool = 'circle' | 'rect' | 'arrow' | 'text'
 type ToolMode = 'select' | DrawTool
 type HandleType = 'tl' | 'tr' | 'bl' | 'br' | 'rotate' | 'move'
 
@@ -161,6 +161,11 @@ export default function ImageAnnotator({ imageFile, onSave, onCancel }: Props) {
         ctx.beginPath()
         ctx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2)
         ctx.stroke()
+      } else if (s.type === 'rect') {
+        const w = s.x2 - s.x1, h = s.y2 - s.y1
+        if (Math.abs(w) < 4 || Math.abs(h) < 4) return
+        ctx.beginPath()
+        ctx.strokeRect(s.x1, s.y1, w, h)
       } else if (s.type === 'arrow') {
         const dx = s.x2 - s.x1, dy = s.y2 - s.y1
         if (Math.hypot(dx, dy) < 6) return
@@ -257,6 +262,11 @@ export default function ImageAnnotator({ imageFile, onSave, onCancel }: Props) {
       const cx = (s.x1 + s.x2) / 2, cy = (s.y1 + s.y2) / 2
       const rx = Math.abs(s.x2 - s.x1) / 2 + tol, ry = Math.abs(s.y2 - s.y1) / 2 + tol
       return ((x - cx) / rx) ** 2 + ((y - cy) / ry) ** 2 <= 1
+    }
+    if (s.type === 'rect') {
+      const left = Math.min(s.x1, s.x2), right = Math.max(s.x1, s.x2)
+      const top  = Math.min(s.y1, s.y2), bottom = Math.max(s.y1, s.y2)
+      return x >= left - tol && x <= right + tol && y >= top - tol && y <= bottom + tol
     }
     if (s.type === 'arrow') {
       return distToSeg(x, y, s.x1, s.y1, s.x2, s.y2) < tol
@@ -504,6 +514,7 @@ export default function ImageAnnotator({ imageFile, onSave, onCancel }: Props) {
         <div className="flex gap-1">
           <ToolBtn t="select" icon="↖" label="選択" />
           <ToolBtn t="circle" icon="◯" label="丸囲み" />
+          <ToolBtn t="rect"   icon="□" label="四角囲み" />
           <ToolBtn t="arrow"  icon="→" label="矢印" />
           <ToolBtn t="text"   icon="Ａ" label="文字" />
         </div>
@@ -561,6 +572,7 @@ export default function ImageAnnotator({ imageFile, onSave, onCancel }: Props) {
         {tool === 'select' && !selectedId  && 'シェイプをクリックして選択 → ドラッグで移動 ／ 白い□でサイズ変更 ／ 青い●で回転'}
         {tool === 'select' && selectedId != null && '青い●: 回転 ／ 白い□: サイズ変更 ／ 本体ドラッグ: 移動 ／ 右の°でリセット'}
         {tool === 'circle' && 'ドラッグして丸囲みを描きます'}
+        {tool === 'rect'   && 'ドラッグして四角囲みを描きます'}
         {tool === 'arrow'  && 'ドラッグして矢印を描きます（始点 → 終点）'}
         {tool === 'text'   && 'クリックした位置にテキストを追加します'}
       </div>
