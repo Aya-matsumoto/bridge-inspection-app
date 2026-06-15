@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { del } from '@vercel/blob'
+import { r2Delete } from '@/lib/r2'
 
 export const dynamic = 'force-dynamic'
 
@@ -31,12 +31,10 @@ export async function GET(req: NextRequest) {
   let deletedRecords = 0
 
   for (const record of expiredRecords) {
-    // Vercel Blob から写真ファイルを削除
+    // Cloudflare R2 から写真ファイルを削除
     for (const photo of record.photos) {
       try {
-        await del(photo.filePath, {
-          token: process.env.BLOB_READ_WRITE_TOKEN,
-        })
+        await r2Delete(photo.filePath)
         deletedPhotos++
       } catch {
         // ファイルが既に存在しない場合などは無視

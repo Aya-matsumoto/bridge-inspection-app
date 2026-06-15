@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { put } from '@vercel/blob'
+import { r2Put } from '@/lib/r2'
 
 export async function POST(req: NextRequest) {
   const formData = await req.formData()
@@ -22,19 +22,17 @@ export async function POST(req: NextRequest) {
   }
 
   const ext = file.name.split('.').pop()
-  const fileName = `${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`
+  const key = `${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`
 
-  // Vercel Blob にアップロード（公開アクセス可）
-  const blob = await put(fileName, file, {
-    access: 'public',
-    token: process.env.BLOB_READ_WRITE_TOKEN,
-  })
+  // Cloudflare R2 にアップロード（公開 URL を返す）
+  const buf = Buffer.from(await file.arrayBuffer())
+  const publicUrl = await r2Put(key, buf, file.type)
 
   const photo = await prisma.photo.create({
     data: {
       recordId,
       type,
-      filePath: blob.url,   // Blob の URL をそのまま保存
+      filePath: publicUrl,   // R2 の公開 URL をそのまま保存
       originalName: file.name,
     },
   })

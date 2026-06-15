@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { del } from '@vercel/blob'
+import { r2Delete } from '@/lib/r2'
 
 export async function DELETE(_req: NextRequest, { params }: { params: { id: string } }) {
   const id = parseInt(params.id)
@@ -11,9 +11,9 @@ export async function DELETE(_req: NextRequest, { params }: { params: { id: stri
   // DBから削除
   await prisma.photo.delete({ where: { id } })
 
-  // Vercel Blob からも削除（失敗しても無視）
+  // Cloudflare R2 からも削除（失敗しても無視）
   try {
-    await del(photo.filePath)
+    await r2Delete(photo.filePath)
   } catch { /* スキップ */ }
 
   return NextResponse.json({ success: true })
