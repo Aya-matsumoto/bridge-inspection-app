@@ -1,9 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { getCurrentUser, parseAllowedOffices } from '@/lib/userAuth'
 
 export async function GET() {
+  const user = await getCurrentUser()
+  const allowed = user ? parseAllowedOffices(user.allowedOffices) : null
+
   const offices = await prisma.subOfficeMaster.findMany({
-    where: { isActive: true },
+    where: {
+      isActive: true,
+      ...(allowed ? { name: { in: allowed } } : {}),
+    },
     orderBy: { sortOrder: 'asc' },
   })
   return NextResponse.json(offices)

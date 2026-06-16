@@ -15,6 +15,7 @@ model InspectionRecord {
   routeNo         Int
   bridgeName      String
   spanNo          String?
+  distanceMarker  String?
   damageType      String
   location        String
   elementNo       String?
@@ -54,4 +55,36 @@ model AdminSession {
   id        String   @id
   createdAt DateTime @default(now())
   expiresAt DateTime
+}
+
+model User {
+  id             Int           @id @default(autoincrement())
+  loginId        String        @unique
+  password       String
+  displayName    String
+  allowedOffices String        @default("all")
+  isAdmin        Boolean       @default(false)
+  isActive       Boolean       @default(true)
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+  sessions       UserSession[]
+}
+
+model UserSession {
+  id        String   @id
+  userId    Int
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  expiresAt DateTime
+}
+
+model BridgeMaster {
+  id             Int      @id @default(autoincrement())
+  sortOrder      String   @default("")
+  subOffice      String
+  bridgeName     String
+  routeNo        Int
+  distanceMarker String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 }

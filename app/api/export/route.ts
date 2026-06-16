@@ -188,13 +188,15 @@ async function fillPhotoSheet(
   record: {
     bridgeName: string
     spanNo?: string | null
+    distanceMarker?: string | null
     damageType: string
     location?: string
     elementNo?: string | null
     discoveryDate: Date | string
     photos: { type: string; filePath: string }[]
   },
-  sheetNum: number
+  sheetNum: number,
+  isKyoto = false
 ) {
   const discoveryDate = new Date(record.discoveryDate)
 
@@ -211,6 +213,10 @@ async function fillPhotoSheet(
   ps.getCell('E1').value = sheetNum
   // C2: 損傷種別
   ps.getCell('C2').value = record.damageType
+  // E2: 距離標（京都のみ）
+  if (isKyoto && record.distanceMarker) {
+    ps.getCell('E2').value = record.distanceMarker
+  }
   // A6: 撮影日（A6:C6 マージ）
   ps.getCell('A6').value = `${formatJpDate(discoveryDate)}撮影`
 
@@ -280,7 +286,7 @@ export async function GET(req: NextRequest) {
       status: 'submitted',
       discoveryDate: { gte: startDate, lte: endDate },
     },
-    orderBy: { discoveryDate: 'asc' },
+    orderBy: [{ discoveryDate: 'asc' }, { bridgeName: 'asc' }],
     include: { photos: true },
   })
 
@@ -288,8 +294,10 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: '該当する期間のデータがありません' }, { status: 404 })
   }
 
-  // ── テンプレートを読み込む ──
-  const templatePath = join(process.cwd(), 'templates', 'record_template.xlsx')
+  // ── 担当事務所（京都か否か）でテンプレートを切り替え ──
+  const isKyoto = records[0].mainOffice === '京都'
+  const templateName = isKyoto ? 'record_template_kyoto.xlsx' : 'record_template.xlsx'
+  const templatePath = join(process.cwd(), 'templates', templateName)
   const templateBuf  = await readFile(templatePath)
 
   const workbook = new ExcelJS.Workbook()
@@ -311,7 +319,23 @@ export async function GET(req: NextRequest) {
     const discoveryDate = new Date(record.discoveryDate)
     const measureDate   = record.measureDate ? new Date(record.measureDate) : null
 
-    const values: [number, ExcelJS.CellValue][] = [
+    // 京都テンプレートは E列=距離標 が追加されているため列が1つずれる
+    const values: [number, ExcelJS.CellValue][] = isKyoto ? [
+      [1,  record.mainOffice],
+      [2,  record.subOffice],
+      [3,  record.routeNo],
+      [4,  record.bridgeName],
+      [5,  (record as any).distanceMarker || ''], // E: 距離標
+      [6,  (record as any).spanNo || ''],          // F: 径間番号
+      [7,  record.damageType],                     // G: 損傷種別・内容
+      [8,  record.location],                       // H: 位置（部材・部位）
+      [9,  (record as any).elementNo || ''],        // I: 要素番号
+      [10, formatJpDate(discoveryDate)],            // J: 発見日
+      [11, record.measureStatus || ''],            // K: 措置状況
+      [12, measureDate ? formatJpDate(measureDate) : ''], // L: 措置日
+      [13, record.measurePlan || ''],              // M: 措置予定
+      [14, record.notes || String(i + 1)],         // N: 備考・写真No
+    ] : [
       [1,  record.mainOffice],          // A: 担当事務所名
       [2,  record.subOffice],           // B: 担当出張所名
       [3,  record.routeNo],             // C: 号線
@@ -324,7 +348,7 @@ export async function GET(req: NextRequest) {
       [10, record.measureStatus || ''], // J: 措置状況
       [11, measureDate ? formatJpDate(measureDate) : ''], // K: 措置日
       [12, record.measurePlan || ''],   // L: 措置予定
-      [13, record.notes || String(i + 1)],  // M: 備考・写真No（通し番号のみ）
+      [13, record.notes || String(i + 1)],  // M: 備考・写真No
     ]
 
     values.forEach(([col, val]) => {
@@ -338,12 +362,10 @@ export async function GET(req: NextRequest) {
   })
 
   // ── 写真シートの処理 ──
-  // テンプレートにあらかじめ (1)〜(20) が用意されているので、そのまま使うだけ
-
   for (let i = 0; i < records.length; i++) {
     const sheetNum = i + 1
     const ps = workbook.getWorksheet(`(${sheetNum})`)!
-    await fillPhotoSheet(workbook, ps, records[i], sheetNum)
+    await fillPhotoSheet(workbook, ps, records[i], sheetNum, isKyoto)
   }
 
   // 使わなかったテンプレート写真シートを削除
@@ -352,7 +374,7 @@ export async function GET(req: NextRequest) {
     if (sheet) workbook.removeWorksheet(sheet.id)
   }
 
-  // Sheet3（補助シート）を削除
+  // Sheet3（補助シート）を削除（非京都テンプレートのみ存在）
   const sheet3 = workbook.getWorksheet('Sheet3')
   if (sheet3) workbook.removeWorksheet(sheet3.id)
 

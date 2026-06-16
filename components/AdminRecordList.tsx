@@ -19,6 +19,7 @@ interface Record {
   routeNo: number
   bridgeName: string
   spanNo: string | null
+  distanceMarker: string | null
   damageType: string
   location: string
   elementNo: string | null
@@ -90,6 +91,7 @@ export default function AdminRecordList({ initialRecords, offices }: Props) {
       routeNo: record.routeNo,
       bridgeName: record.bridgeName,
       spanNo: record.spanNo,
+      distanceMarker: record.distanceMarker,
       damageType: record.damageType,
       location: record.location,
       elementNo: record.elementNo,
@@ -369,6 +371,7 @@ export default function AdminRecordList({ initialRecords, offices }: Props) {
                   <th className="p-3 text-left text-xs font-medium text-gray-600 whitespace-nowrap">No.</th>
                   <th className="p-3 text-left text-xs font-medium text-gray-600 whitespace-nowrap">出張所</th>
                   <th className="p-3 text-left text-xs font-medium text-gray-600 whitespace-nowrap">橋梁名</th>
+                  <th className="p-3 text-left text-xs font-medium text-gray-600 whitespace-nowrap hidden md:table-cell">距離標</th>
                   <th className="p-3 text-left text-xs font-medium text-gray-600 whitespace-nowrap hidden md:table-cell">損傷種別</th>
                   <th className="p-3 text-left text-xs font-medium text-gray-600 whitespace-nowrap hidden md:table-cell">位置</th>
                   <th className="p-3 text-left text-xs font-medium text-gray-600 whitespace-nowrap">発見日</th>
@@ -385,6 +388,9 @@ export default function AdminRecordList({ initialRecords, offices }: Props) {
                     <td className="p-3 text-gray-500 text-xs">{record.officeNo}</td>
                     <td className="p-3 text-xs whitespace-nowrap">{record.subOffice}</td>
                     <td className="p-3 font-medium text-xs">{record.bridgeName}</td>
+                    <td className="p-3 text-gray-600 text-xs hidden md:table-cell whitespace-nowrap">
+                      {record.distanceMarker || <span className="text-gray-300">—</span>}
+                    </td>
                     <td className="p-3 text-gray-600 text-xs hidden md:table-cell">{record.damageType}</td>
                     <td className="p-3 text-gray-600 text-xs hidden md:table-cell">{record.location}</td>
                     <td className="p-3 text-gray-600 text-xs whitespace-nowrap">{formatDate(record.discoveryDate)}</td>
@@ -415,7 +421,7 @@ export default function AdminRecordList({ initialRecords, offices }: Props) {
                 ))}
                 {filtered.length === 0 && (
                   <tr>
-                    <td colSpan={8} className="p-8 text-center text-gray-400 text-sm">データがありません</td>
+                    <td colSpan={9} className="p-8 text-center text-gray-400 text-sm">データがありません</td>
                   </tr>
                 )}
               </tbody>
@@ -452,6 +458,53 @@ export default function AdminRecordList({ initialRecords, offices }: Props) {
                   />
                 </div>
               </div>
+              {/* 距離標（京都のみ） */}
+              {editForm.mainOffice === '京都' && (
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-1">
+                    距離標
+                    <span className="ml-1 text-green-600 font-normal">（京都）</span>
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="number"
+                      step="0.001"
+                      min="0"
+                      value={editForm.distanceMarker ? editForm.distanceMarker.split('kp～')[0] : ''}
+                      onChange={e => {
+                        const from = e.target.value
+                        const to = editForm.distanceMarker ? editForm.distanceMarker.split('kp～')[1]?.replace('kp', '') : ''
+                        if (from && to) {
+                          setEditForm(prev => ({ ...prev, distanceMarker: `${parseFloat(from).toFixed(3)}kp～${parseFloat(to).toFixed(3)}kp` }))
+                        } else {
+                          setEditForm(prev => ({ ...prev, distanceMarker: null }))
+                        }
+                      }}
+                      className="w-full border border-gray-300 rounded p-2 text-sm"
+                      placeholder="0.000"
+                    />
+                    <span className="text-sm text-gray-500 whitespace-nowrap">kp ～</span>
+                    <input
+                      type="number"
+                      step="0.001"
+                      min="0"
+                      value={editForm.distanceMarker ? editForm.distanceMarker.split('kp～')[1]?.replace('kp', '') : ''}
+                      onChange={e => {
+                        const to = e.target.value
+                        const from = editForm.distanceMarker ? editForm.distanceMarker.split('kp～')[0] : ''
+                        if (from && to) {
+                          setEditForm(prev => ({ ...prev, distanceMarker: `${parseFloat(from).toFixed(3)}kp～${parseFloat(to).toFixed(3)}kp` }))
+                        } else {
+                          setEditForm(prev => ({ ...prev, distanceMarker: null }))
+                        }
+                      }}
+                      className="w-full border border-gray-300 rounded p-2 text-sm"
+                      placeholder="0.000"
+                    />
+                    <span className="text-sm text-gray-500">kp</span>
+                  </div>
+                </div>
+              )}
               <div>
                 <label className="block text-xs font-medium text-gray-700 mb-1">橋梁名</label>
                 <input type="text" value={editForm.bridgeName || ''}

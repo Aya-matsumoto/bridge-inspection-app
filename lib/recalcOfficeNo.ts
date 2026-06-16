@@ -10,7 +10,7 @@ export async function recalcOfficeNo(subOffice: string): Promise<void> {
       subOffice,
       status: { not: 'deleted' },
     },
-    orderBy: { discoveryDate: 'asc' },
+    orderBy: [{ discoveryDate: 'asc' }, { bridgeName: 'asc' }],
     select: { id: true },
   })
 

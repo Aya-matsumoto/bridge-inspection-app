@@ -29,7 +29,7 @@ export async function GET(req: NextRequest) {
 
   const records = await prisma.inspectionRecord.findMany({
     where: status ? { status } : undefined,
-    orderBy: { discoveryDate: 'asc' },
+    orderBy: [{ discoveryDate: 'asc' }, { bridgeName: 'asc' }],
     include: { photos: true },
   })
 

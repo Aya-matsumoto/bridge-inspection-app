@@ -9,6 +9,15 @@ interface SubOffice {
   mainOffice: string
 }
 
+interface BridgeMaster {
+  id: number
+  sortOrder: string
+  subOffice: string
+  bridgeName: string
+  routeNo: number
+  distanceMarker: string | null
+}
+
 interface PhotoPreview {
   file: File
   preview: string
@@ -39,6 +48,7 @@ const td: React.CSSProperties = {
 
 export default function InputPage() {
   const [offices, setOffices] = useState<SubOffice[]>([])
+  const [bridges, setBridges] = useState<BridgeMaster[]>([])
   const [formData, setFormData] = useState({
     subOffice: '',
     mainOffice: '',
@@ -51,6 +61,9 @@ export default function InputPage() {
     discoveryDate: '',
     notes: '',
   })
+  // 距離標（京都のみ使用・マスタから自動設定）
+  const [distanceFrom, setDistanceFrom] = useState('')
+  const [distanceTo,   setDistanceTo]   = useState('')
   const [inspectionPhotos,  setInspectionPhotos]  = useState<PhotoPreview[]>([])
   const [positionDiagram,   setPositionDiagram]   = useState<PositionDiagram | null>(null)
   const [showAnnotator,     setShowAnnotator]     = useState(false)
@@ -65,18 +78,47 @@ export default function InputPage() {
     fetch('/api/offices')
       .then(r => r.json())
       .then(data => setOffices(data))
+    fetch('/api/bridges')
+      .then(r => r.ok ? r.json() : [])
+      .then(data => setBridges(Array.isArray(data) ? data : []))
+      .catch(() => {})
   }, [])
 
   const today = new Date().toISOString().split('T')[0]
 
   function handleOfficeChange(name: string) {
     const office = offices.find(o => o.name === name)
-    setFormData(prev => ({
-      ...prev,
-      subOffice: name,
-      mainOffice: office?.mainOffice || '',
-    }))
+    const newMain = office?.mainOffice || ''
+    // 出張所を変えたら橋梁・号線・距離標をリセット
+    setFormData(prev => ({ ...prev, subOffice: name, mainOffice: newMain, bridgeName: '', routeNo: '' }))
+    setDistanceFrom(''); setDistanceTo('')
   }
+
+  // 選択中の出張所に紐づく橋梁一覧
+  const filteredBridges = formData.subOffice
+    ? bridges.filter(b => b.subOffice === formData.subOffice)
+    : []
+
+  // 橋梁を選択したとき：号線・距離標を自動入力
+  function handleBridgeChange(name: string) {
+    const bridge = filteredBridges.find(b => b.bridgeName === name)
+    if (bridge) {
+      setFormData(prev => ({ ...prev, bridgeName: name, routeNo: String(bridge.routeNo) }))
+      // 距離標をパース
+      if (bridge.distanceMarker) {
+        const parts = bridge.distanceMarker.split('kp～')
+        setDistanceFrom(parts[0] ?? '')
+        setDistanceTo((parts[1] ?? '').replace('kp', ''))
+      } else {
+        setDistanceFrom(''); setDistanceTo('')
+      }
+    } else {
+      setFormData(prev => ({ ...prev, bridgeName: name, routeNo: '' }))
+      setDistanceFrom(''); setDistanceTo('')
+    }
+  }
+
+  const isKyoto = formData.mainOffice === '京都'
 
   function validateForm() {
     const errs: Record<string, string> = {}
@@ -184,9 +226,15 @@ export default function InputPage() {
     setErrors({})
     setSaving(true)
     try {
+      // 距離標：京都かつ両方入力済みの場合のみ "X.XXXkp～Y.YYYkp" 形式で保存
+      const distanceMarker = (isKyoto && distanceFrom && distanceTo)
+        ? `${parseFloat(distanceFrom).toFixed(3)}kp～${parseFloat(distanceTo).toFixed(3)}kp`
+        : null
+
       const body = {
         ...formData,
         routeNo: parseInt(formData.routeNo),
+        distanceMarker,
         discoveryDate: formData.discoveryDate,
         measureStatus: '未',
         measureDate: null,
@@ -287,7 +335,7 @@ export default function InputPage() {
     <div className="min-h-screen bg-gray-50">
       <NavHeader current="input" />
 
-      <main className="max-w-5xl mx-auto p-3">
+      <main className="max-w-7xl mx-auto p-3">
 
         {/* エラーサマリー */}
         {Object.keys(errors).length > 0 && (
@@ -302,23 +350,24 @@ export default function InputPage() {
         {/* ── Excel表形式 入力テーブル ── */}
         <div className="bg-white shadow rounded overflow-hidden mb-4">
           <div className="overflow-x-auto">
-            <table style={{ borderCollapse: 'collapse', width: '100%', minWidth: '860px' }}>
+            <table style={{ borderCollapse: 'collapse', width: '100%', minWidth: '900px' }}>
               <colgroup>
-                <col style={{ width: '90px' }} />
-                <col style={{ width: '110px' }} />
-                <col style={{ width: '60px' }} />
-                <col style={{ width: '130px' }} />
-                <col style={{ width: '80px' }} />
-                <col style={{ width: '150px' }} />
-                <col style={{ width: '120px' }} />
-                <col style={{ width: '80px' }} />
-                <col style={{ width: '110px' }} />
-                <col style={{ width: '100px' }} />
+                <col style={{ width: '85px' }} />{/* 担当事務所 */}
+                <col style={{ width: '105px' }} />{/* 担当出張所 */}
+                <col style={{ width: '130px' }} />{/* 橋梁名 */}
+                <col style={{ width: '55px' }} />{/* 号線 */}
+                <col style={{ width: '155px' }} />{/* 距離標 */}
+                <col style={{ width: '65px' }} />{/* 径間番号 */}
+                <col style={{ width: '140px' }} />{/* 損傷種別 */}
+                <col style={{ width: '110px' }} />{/* 位置 */}
+                <col style={{ width: '65px' }} />{/* 要素番号 */}
+                <col style={{ width: '100px' }} />{/* 発見日 */}
+                <col style={{ width: '90px' }} />{/* 備考 */}
               </colgroup>
               <thead>
                 {/* タイトル行 */}
                 <tr style={{ height: '28px', background: '#f0f4f8' }}>
-                  <th colSpan={10} style={{ ...th, fontSize: '12px', background: '#f0f4f8', letterSpacing: '0.02em' }}>
+                  <th colSpan={11} style={{ ...th, fontSize: '12px', background: '#f0f4f8', letterSpacing: '0.02em' }}>
                     {TITLE}
                   </th>
                 </tr>
@@ -326,10 +375,13 @@ export default function InputPage() {
                 <tr style={{ height: '24px' }}>
                   <th rowSpan={2} style={{ ...th, background: '#dce6f1' }}>担当<br />事務所名</th>
                   <th rowSpan={2} style={{ ...th, background: '#dce6f1' }}>担当<br />出張所名</th>
-                  <th rowSpan={2} style={{ ...th, background: '#dce6f1' }}>号線</th>
                   <th rowSpan={2} style={{ ...th, background: '#fde9d9' }}>橋梁名</th>
+                  <th rowSpan={2} style={{ ...th, background: '#dce6f1' }}>号線</th>
+                  <th rowSpan={2} style={{ ...th, background: isKyoto ? '#e8f4e8' : '#f0f0f0', color: isKyoto ? '#1a5c1a' : '#aaa' }}>
+                    距離標<br /><span style={{ fontSize: '9px', fontWeight: 'normal' }}>{isKyoto ? '●kp～●kp' : '京都のみ'}</span>
+                  </th>
                   <th colSpan={5} style={{ ...th, background: '#dce6f1', fontWeight: 'bold' }}>損傷・変状</th>
-                  <th rowSpan={2} style={{ ...th, background: '#dce6f1' }}>備考<br />(写真No.等)</th>
+                  <th rowSpan={2} style={{ ...th, background: '#dce6f1' }}>備考<br />(特筆事項等)</th>
                 </tr>
                 {/* 中ヘッダー */}
                 <tr style={{ height: '30px' }}>
@@ -342,13 +394,13 @@ export default function InputPage() {
               </thead>
               <tbody>
                 <tr style={{ height: '48px' }}>
-                  {/* 担当事務所名 */}
+                  {/* 担当事務所名（自動） */}
                   <td style={td}>
                     <input type="text" value={formData.mainOffice} readOnly
                       className="w-full border-0 p-1 text-sm bg-gray-100 text-gray-600 focus:outline-none"
                       placeholder="自動入力" />
                   </td>
-                  {/* 担当出張所名 */}
+                  {/* 担当出張所名（選択） */}
                   <td style={td}>
                     <select value={formData.subOffice} onChange={e => handleOfficeChange(e.target.value)}
                       className={`w-full border-0 p-1 text-sm focus:outline-none focus:ring-1 focus:ring-blue-400 ${errors.subOffice ? 'bg-red-50' : 'bg-white'}`}>
@@ -356,17 +408,56 @@ export default function InputPage() {
                       {offices.map(o => <option key={o.id} value={o.name}>{o.name}</option>)}
                     </select>
                   </td>
-                  {/* 号線 */}
+                  {/* 橋梁名（出張所に応じて絞り込み選択） */}
                   <td style={td}>
-                    <input type="number" min="1" value={formData.routeNo}
-                      onChange={e => setFormData(prev => ({ ...prev, routeNo: e.target.value }))}
-                      className={inputClass('routeNo')} placeholder="1" />
+                    {filteredBridges.length > 0 ? (
+                      <select
+                        value={formData.bridgeName}
+                        onChange={e => handleBridgeChange(e.target.value)}
+                        className={`w-full border-0 p-1 text-sm focus:outline-none focus:ring-1 focus:ring-blue-400 ${errors.bridgeName ? 'bg-red-50' : 'bg-white'}`}
+                      >
+                        <option value="">選択...</option>
+                        {filteredBridges.map((b, i) => (
+                          <option key={i} value={b.bridgeName}>
+                            {b.sortOrder ? `${b.sortOrder}. ` : ''}{b.bridgeName}
+                          </option>
+                        ))}
+                      </select>
+                    ) : (
+                      <input type="text" value={formData.bridgeName}
+                        onChange={e => setFormData(prev => ({ ...prev, bridgeName: e.target.value }))}
+                        className={inputClass('bridgeName')}
+                        placeholder={formData.subOffice ? '直接入力' : '出張所を先に選択'} />
+                    )}
                   </td>
-                  {/* 橋梁名 */}
-                  <td style={td}>
-                    <input type="text" value={formData.bridgeName}
-                      onChange={e => setFormData(prev => ({ ...prev, bridgeName: e.target.value }))}
-                      className={inputClass('bridgeName')} placeholder="○○橋" />
+                  {/* 号線（マスタから自動入力・読取専用） */}
+                  <td style={{ ...td, background: formData.routeNo ? '#f0f7ff' : '#fafafa' }}>
+                    <input type="text" value={formData.routeNo} readOnly
+                      className="w-full border-0 p-1 text-sm bg-transparent text-center focus:outline-none text-gray-700"
+                      placeholder="—" />
+                  </td>
+                  {/* 距離標（マスタから自動入力・手動編集可） */}
+                  <td style={{ ...td, background: isKyoto ? '#fff' : '#f5f5f5' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '2px', fontSize: '11px' }}>
+                      <input
+                        type="number" step="0.001" min="0"
+                        value={distanceFrom}
+                        onChange={e => setDistanceFrom(e.target.value)}
+                        disabled={!isKyoto}
+                        style={{ width: '50px', border: '1px solid #ccc', borderRadius: '3px', padding: '2px 3px', fontSize: '11px', background: isKyoto ? '#fff' : '#eee', color: isKyoto ? '#000' : '#aaa' }}
+                        placeholder="0.000"
+                      />
+                      <span style={{ color: isKyoto ? '#333' : '#aaa' }}>kp～</span>
+                      <input
+                        type="number" step="0.001" min="0"
+                        value={distanceTo}
+                        onChange={e => setDistanceTo(e.target.value)}
+                        disabled={!isKyoto}
+                        style={{ width: '50px', border: '1px solid #ccc', borderRadius: '3px', padding: '2px 3px', fontSize: '11px', background: isKyoto ? '#fff' : '#eee', color: isKyoto ? '#000' : '#aaa' }}
+                        placeholder="0.000"
+                      />
+                      <span style={{ color: isKyoto ? '#333' : '#aaa' }}>kp</span>
+                    </div>
                   </td>
                   {/* 径間番号 */}
                   <td style={td}>
@@ -401,11 +492,11 @@ export default function InputPage() {
                       className={inputClass('discoveryDate')} />
                   </td>
                   {/* 備考 */}
-                  <td style={td}>
+                  <td style={{ ...td, background: '#f5f5f5' }}>
                     <input type="text" value={formData.notes}
                       onChange={e => setFormData(prev => ({ ...prev, notes: e.target.value }))}
-                      className="w-full border-0 p-1 text-sm focus:outline-none focus:ring-1 focus:ring-blue-400 bg-white"
-                      placeholder="メモ" />
+                      className="w-full border-0 p-1 text-sm focus:outline-none focus:ring-1 focus:ring-blue-400 bg-gray-100"
+                      placeholder="特筆事項等" />
                   </td>
                 </tr>
               </tbody>
