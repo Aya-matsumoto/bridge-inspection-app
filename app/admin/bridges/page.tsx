@@ -117,7 +117,7 @@ export default function BridgesPage() {
   // プレビューデータをDBに保存
   async function savePreview() {
     if (preview.length === 0) return
-    if (!confirm(`${preview.length}件の橋梁データを登録します。\n既存のデータはすべて置き換えられます。よろしいですか？`)) return
+    if (!confirm(`${preview.length}件の橋梁データを登録します。\n出張所名・橋梁名が一致するデータは置き換え、一致しないデータは追加されます。よろしいですか？`)) return
     setSaving(true)
     try {
       const res = await fetch('/api/bridges', {
@@ -125,15 +125,14 @@ export default function BridgesPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(preview),
       })
-      if (!res.ok) throw new Error()
       const result = await res.json()
-      if (result?.error) throw new Error(result.error)
+      if (!res.ok || result?.error) throw new Error(result?.error || 'エラーが発生しました。もう一度お試しください。')
       setPreview([])
       setMessage({ type: 'success', text: `${result.count}件の橋梁データを登録しました。` })
       // 登録後にDBから再取得して最新データを表示
       loadBridges()
-    } catch {
-      setMessage({ type: 'error', text: 'エラーが発生しました。もう一度お試しください。' })
+    } catch (e: any) {
+      setMessage({ type: 'error', text: e?.message || 'エラーが発生しました。もう一度お試しください。' })
     } finally {
       setSaving(false)
     }
@@ -150,7 +149,8 @@ export default function BridgesPage() {
         <div className="bg-white rounded-lg shadow p-4 mb-4">
           <p className="text-sm text-gray-600 mb-3">
             CSVファイルから橋梁の一覧（出張所名・橋梁名・号線・距離標）を取り込みます。<br />
-            取り込むと<span className="text-red-500 font-bold">既存データはすべて置き換え</span>られます。
+            <span className="text-red-500 font-bold">出張所名と橋梁名が既存データと一致する場合は内容を置き換え</span>、一致しない場合は新しく追加されます。<br />
+            ※CSVの出張所名は「出張所管理」に登録済みの名称と完全に一致している必要があります。一致しない場合はエラーになります。
           </p>
 
           <div className="flex flex-wrap gap-3">
