@@ -143,8 +143,8 @@ export default function InputPage() {
         newErrors.photo_inspection = 'JPGまたはPNG形式のファイルを選択してください'
         continue
       }
-      if (file.size > 10 * 1024 * 1024) {
-        newErrors.photo_inspection = '10MB以下のファイルを選択してください'
+      if (file.size > 1 * 1024 * 1024) {
+        newErrors.photo_inspection = '1MB以下のファイルを選択してください'
         continue
       }
       validFiles.push({ file, preview: URL.createObjectURL(file) })
@@ -180,8 +180,8 @@ export default function InputPage() {
       setErrors(prev => ({ ...prev, position: 'JPGまたはPNG形式のファイルを選択してください' }))
       return
     }
-    if (file.size > 20 * 1024 * 1024) {
-      setErrors(prev => ({ ...prev, position: '20MB以下のファイルを選択してください' }))
+    if (file.size > 1 * 1024 * 1024) {
+      setErrors(prev => ({ ...prev, position: '1MB以下のファイルを選択してください' }))
       return
     }
     if (positionDiagram) URL.revokeObjectURL(positionDiagram.preview)
@@ -511,7 +511,7 @@ export default function InputPage() {
           <div className="bg-white rounded shadow p-4">
             <p className="text-sm font-bold text-gray-700 mb-2">
               📷 写真（点検時）
-              <span className="ml-2 text-xs font-normal text-gray-500">任意・JPG/PNG・10MB以下・最大2枚</span>
+              <span className="ml-2 text-xs font-normal text-gray-500">任意・JPG/PNG・1MB以下・最大2枚</span>
             </p>
             <label
               className={`flex flex-col items-center justify-center w-full h-20 border-2 border-dashed rounded cursor-pointer mb-2 transition-colors ${
@@ -548,7 +548,7 @@ export default function InputPage() {
           <div className="bg-white rounded shadow p-4">
             <p className="text-sm font-bold text-gray-700 mb-2">
               🗺️ 位置図
-              <span className="ml-2 text-xs font-normal text-gray-500">任意・JPG/PNG・20MB以下</span>
+              <span className="ml-2 text-xs font-normal text-gray-500">任意・JPG/PNG・1MB以下</span>
             </p>
 
             {!positionDiagram ? (

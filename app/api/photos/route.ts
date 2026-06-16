@@ -16,9 +16,9 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'JPGまたはPNG形式のファイルを選択してください' }, { status: 400 })
   }
 
-  const maxSize = type === 'position' ? 20 * 1024 * 1024 : 10 * 1024 * 1024
+  const maxSize = 1 * 1024 * 1024
   if (file.size > maxSize) {
-    return NextResponse.json({ error: `${type === 'position' ? '20' : '10'}MB以下のファイルを選択してください` }, { status: 400 })
+    return NextResponse.json({ error: '1MB以下のファイルを選択してください' }, { status: 400 })
   }
 
   const ext = file.name.split('.').pop()
