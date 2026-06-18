@@ -21,12 +21,15 @@ interface BridgeMaster {
 interface PhotoPreview {
   file: File
   preview: string
+  annotatedBlob?: Blob
+  annotationData?: string
 }
 
 interface PositionDiagram {
   originalFile: File
-  annotatedBlob?: Blob       // アノテーション済みの Blob
-  preview: string            // 表示用プレビューURL
+  annotatedBlob?: Blob
+  preview: string
+  annotationData?: string
 }
 
 const TITLE = '維持作業対応(対策区分『Ｍ』相当)損傷・変状の措置状況　記録表'
@@ -67,6 +70,8 @@ export default function InputPage() {
   const [inspectionPhotos,  setInspectionPhotos]  = useState<PhotoPreview[]>([])
   const [positionDiagram,   setPositionDiagram]   = useState<PositionDiagram | null>(null)
   const [showAnnotator,     setShowAnnotator]     = useState(false)
+  const [showPhotoAnnotator, setShowPhotoAnnotator] = useState(false)
+  const [selectedPhotoIdx,  setSelectedPhotoIdx]  = useState<number | null>(null)
   const [errors,            setErrors]            = useState<Record<string, string>>({})
   const [saving,            setSaving]            = useState(false)
   const [submitted,         setSubmitted]         = useState(false)
@@ -172,6 +177,20 @@ export default function InputPage() {
       URL.revokeObjectURL(prev[index].preview)
       return prev.filter((_, i) => i !== index)
     })
+    if (selectedPhotoIdx === index) setSelectedPhotoIdx(null)
+    else if (selectedPhotoIdx !== null && selectedPhotoIdx > index) setSelectedPhotoIdx(selectedPhotoIdx - 1)
+  }
+
+  function handlePhotoAnnotationSave(blob: Blob, shapes: object[]) {
+    if (selectedPhotoIdx === null) return
+    const newPreview = URL.createObjectURL(blob)
+    const annotationData = JSON.stringify(shapes)
+    setInspectionPhotos(prev => prev.map((p, i) => {
+      if (i !== selectedPhotoIdx) return p
+      URL.revokeObjectURL(p.preview)
+      return { ...p, annotatedBlob: blob, preview: newPreview, annotationData }
+    }))
+    setShowPhotoAnnotator(false)
   }
 
   // ── 位置図：ファイルを処理する共通関数 ──
@@ -203,13 +222,13 @@ export default function InputPage() {
   }
 
   // アノテーター保存コールバック
-  function handleAnnotationSave(blob: Blob) {
+  function handleAnnotationSave(blob: Blob, shapes: object[]) {
     if (!positionDiagram) return
-    // 古いプレビューURLを解放
     URL.revokeObjectURL(positionDiagram.preview)
     const newPreview = URL.createObjectURL(blob)
+    const annotationData = JSON.stringify(shapes)
     setPositionDiagram(prev => prev
-      ? { ...prev, annotatedBlob: blob, preview: newPreview }
+      ? { ...prev, annotatedBlob: blob, preview: newPreview, annotationData }
       : null
     )
     setShowAnnotator(false)
@@ -250,12 +269,17 @@ export default function InputPage() {
       if (!res.ok) throw new Error()
       const record = await res.json()
 
-      // 点検時写真をアップロード
-      for (const { file } of inspectionPhotos) {
+      // 点検時写真をアップロード（書き込み済みがあればそちらを優先）
+      for (const photo of inspectionPhotos) {
         const fd = new FormData()
-        fd.append('file', file)
+        const fileToUpload = photo.annotatedBlob
+          ? new File([photo.annotatedBlob], 'inspection_photo.jpg', { type: 'image/jpeg' })
+          : photo.file
+        fd.append('file', fileToUpload)
         fd.append('recordId', String(record.id))
         fd.append('type', 'inspection')
+        if (photo.annotatedBlob) fd.append('originalFile', photo.file)
+        if (photo.annotationData) fd.append('annotationData', photo.annotationData)
         await fetch('/api/photos', { method: 'POST', body: fd })
       }
 
@@ -263,11 +287,13 @@ export default function InputPage() {
       if (positionDiagram) {
         const fd = new FormData()
         const fileToUpload = positionDiagram.annotatedBlob
-          ? new File([positionDiagram.annotatedBlob], 'position_diagram.png', { type: 'image/png' })
+          ? new File([positionDiagram.annotatedBlob], 'position_diagram.jpg', { type: 'image/jpeg' })
           : positionDiagram.originalFile
         fd.append('file', fileToUpload)
         fd.append('recordId', String(record.id))
         fd.append('type', 'position')
+        if (positionDiagram.annotatedBlob) fd.append('originalFile', positionDiagram.originalFile)
+        if (positionDiagram.annotationData) fd.append('annotationData', positionDiagram.annotationData)
         await fetch('/api/photos', { method: 'POST', body: fd })
       }
 
@@ -287,15 +313,34 @@ export default function InputPage() {
   const inputClass = (field: string) =>
     `w-full border-0 p-1 text-sm focus:outline-none focus:ring-1 focus:ring-blue-400 ${errors[field] ? 'bg-red-50' : 'bg-white'}`
 
+  // ── 写真アノテーター ──
+  if (showPhotoAnnotator && selectedPhotoIdx !== null) {
+    const photo = inspectionPhotos[selectedPhotoIdx]
+    const imageFile = photo.annotatedBlob
+      ? new File([photo.annotatedBlob], 'inspection_photo.jpg', { type: 'image/jpeg' })
+      : photo.file
+    const initialShapes = photo.annotationData ? JSON.parse(photo.annotationData) : undefined
+    return (
+      <ImageAnnotator
+        imageFile={imageFile}
+        initialShapes={initialShapes}
+        onSave={handlePhotoAnnotationSave}
+        onCancel={() => setShowPhotoAnnotator(false)}
+      />
+    )
+  }
+
   // ────────────────────────────────────────────────
   // アノテーターが開いている間はキャンバス全画面を表示
   // ────────────────────────────────────────────────
   if (showAnnotator && positionDiagram) {
+    const initialShapes = positionDiagram.annotationData ? JSON.parse(positionDiagram.annotationData) : undefined
     return (
       <ImageAnnotator
         imageFile={positionDiagram.annotatedBlob
-          ? new File([positionDiagram.annotatedBlob], 'position_diagram.png', { type: 'image/png' })
+          ? new File([positionDiagram.annotatedBlob], 'position_diagram.jpg', { type: 'image/jpeg' })
           : positionDiagram.originalFile}
+        initialShapes={initialShapes}
         onSave={handleAnnotationSave}
         onCancel={() => setShowAnnotator(false)}
       />
@@ -513,33 +558,61 @@ export default function InputPage() {
               📷 写真（点検時）
               <span className="ml-2 text-xs font-normal text-gray-500">任意・JPG/PNG・1MB以下・最大2枚</span>
             </p>
-            <label
-              className={`flex flex-col items-center justify-center w-full h-20 border-2 border-dashed rounded cursor-pointer mb-2 transition-colors ${
-                inspDragOver
-                  ? 'border-blue-400 bg-blue-50'
-                  : 'border-gray-300 hover:bg-gray-50'
-              }`}
-              onDragOver={e => { e.preventDefault(); setInspDragOver(true) }}
-              onDragLeave={() => setInspDragOver(false)}
-              onDrop={handleInspectionDrop}
-            >
-              <span className="text-xl mb-1">📂</span>
-              <span className="text-xs text-gray-500">ここにドロップ、または<span className="text-blue-500 underline">クリックして選択</span></span>
-              <input type="file" accept="image/jpeg,image/png" multiple
-                className="hidden" onChange={handleInspectionPhotoChange} />
-            </label>
+            {inspectionPhotos.length < 2 && (
+              <label
+                className={`flex flex-col items-center justify-center w-full h-20 border-2 border-dashed rounded cursor-pointer mb-2 transition-colors ${
+                  inspDragOver
+                    ? 'border-blue-400 bg-blue-50'
+                    : 'border-gray-300 hover:bg-gray-50'
+                }`}
+                onDragOver={e => { e.preventDefault(); setInspDragOver(true) }}
+                onDragLeave={() => setInspDragOver(false)}
+                onDrop={handleInspectionDrop}
+              >
+                <span className="text-xl mb-1">📂</span>
+                <span className="text-xs text-gray-500">ここにドロップ、または<span className="text-blue-500 underline">クリックして選択</span></span>
+                <input type="file" accept="image/jpeg,image/png" multiple
+                  className="hidden" onChange={handleInspectionPhotoChange} />
+              </label>
+            )}
             {errors.photo_inspection && <p className="text-red-500 text-xs mb-1">{errors.photo_inspection}</p>}
             {inspectionPhotos.length > 0 && (
-              <div className="grid grid-cols-4 gap-1">
-                {inspectionPhotos.map((p, i) => (
-                  <div key={i} className="relative">
-                    <img src={p.preview} alt="" className="w-full h-16 object-cover rounded" />
-                    <button type="button" onClick={() => removeInspectionPhoto(i)}
-                      className="absolute top-0.5 right-0.5 bg-red-500 text-white rounded-full w-4 h-4 text-xs flex items-center justify-center leading-none">
-                      ×
-                    </button>
-                  </div>
-                ))}
+              <div>
+                <div className="grid grid-cols-2 gap-2 mb-2">
+                  {inspectionPhotos.map((p, i) => (
+                    <div
+                      key={i}
+                      className={`relative cursor-pointer rounded border-2 transition-colors ${
+                        selectedPhotoIdx === i ? 'border-blue-500' : 'border-transparent'
+                      }`}
+                      onClick={() => setSelectedPhotoIdx(i === selectedPhotoIdx ? null : i)}
+                    >
+                      <img src={p.preview} alt="" className="w-full h-24 object-cover rounded" />
+                      {p.annotatedBlob && (
+                        <span className="absolute top-1 left-1 bg-green-500 text-white text-[10px] px-1 py-0.5 rounded">
+                          ✓ 書き込み済み
+                        </span>
+                      )}
+                      <button type="button" onClick={e => { e.stopPropagation(); removeInspectionPhoto(i) }}
+                        className="absolute top-0.5 right-0.5 bg-red-500 text-white rounded-full w-5 h-5 text-xs flex items-center justify-center leading-none">
+                        ×
+                      </button>
+                    </div>
+                  ))}
+                </div>
+                <button
+                  type="button"
+                  disabled={selectedPhotoIdx === null}
+                  onClick={() => setShowPhotoAnnotator(true)}
+                  className="w-full bg-blue-600 text-white py-1.5 rounded text-xs font-bold hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  ✏️ {selectedPhotoIdx !== null && inspectionPhotos[selectedPhotoIdx]?.annotatedBlob
+                    ? '書き込みを編集'
+                    : '選択した写真に書き込む'}
+                </button>
+                {selectedPhotoIdx === null && (
+                  <p className="text-xs text-gray-400 text-center mt-1">写真をクリックして選択してください</p>
+                )}
               </div>
             )}
           </div>

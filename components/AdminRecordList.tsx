@@ -9,6 +9,8 @@ interface Photo {
   type: string
   filePath: string
   originalName: string
+  annotationData?: string | null
+  originalFilePath?: string | null
 }
 
 interface Record {
@@ -41,16 +43,21 @@ interface Props {
 
 // 編集モーダル用の写真型
 interface EditPhoto {
-  id?: number      // 既存写真のDB ID（新規追加の場合はundefined）
-  file?: File      // 新規追加ファイル
-  preview: string  // 表示用URL
+  id?: number
+  file?: File
+  preview: string
+  annotatedBlob?: Blob
+  annotationData?: string
+  originalFilePath?: string  // 元画像URL（再編集用）
 }
 
 interface EditPosition {
-  id?: number           // 既存位置図のDB ID
-  originalFile?: File   // 新規ファイル or アノテーター用ファイル
-  annotatedBlob?: Blob  // アノテーション済みBlob
-  preview: string       // 表示用URL
+  id?: number
+  originalFile?: File
+  annotatedBlob?: Blob
+  preview: string
+  annotationData?: string
+  originalFilePath?: string  // 元画像URL（再編集用）
 }
 
 export default function AdminRecordList({ initialRecords, offices }: Props) {
@@ -69,6 +76,8 @@ export default function AdminRecordList({ initialRecords, offices }: Props) {
   const [editPosition, setEditPosition] = useState<EditPosition | null>(null)
   const [showAnnotator, setShowAnnotator] = useState(false)
   const [loadingAnnotator, setLoadingAnnotator] = useState(false)
+  const [showPhotoAnnotator, setShowPhotoAnnotator] = useState(false)
+  const [selectedPhotoIdx, setSelectedPhotoIdx] = useState<number | null>(null)
 
   const filtered = records.filter(r => {
     if (!showDeleted && r.status === 'deleted') return false
@@ -101,21 +110,20 @@ export default function AdminRecordList({ initialRecords, offices }: Props) {
     // 既存の点検時写真
     const inspPhotos = record.photos
       .filter(p => p.type === 'inspection')
-      .map(p => ({ id: p.id, preview: p.filePath }))
+      .map(p => ({ id: p.id, preview: p.filePath, annotationData: p.annotationData ?? undefined, originalFilePath: p.originalFilePath ?? undefined }))
     setEditInspPhotos(inspPhotos)
 
-    // 既存の位置図
     const posPhoto = record.photos.find(p => p.type === 'position')
-    setEditPosition(posPhoto ? { id: posPhoto.id, preview: posPhoto.filePath } : null)
+    setEditPosition(posPhoto ? { id: posPhoto.id, preview: posPhoto.filePath, annotationData: posPhoto.annotationData ?? undefined, originalFilePath: posPhoto.originalFilePath ?? undefined } : null)
   }
 
   function closeEdit() {
-    // 新規追加分の ObjectURL を解放
     editInspPhotos.forEach(p => { if (p.file) URL.revokeObjectURL(p.preview) })
     if (editPosition?.originalFile) URL.revokeObjectURL(editPosition.preview)
     setEditRecord(null)
     setEditInspPhotos([])
     setEditPosition(null)
+    setSelectedPhotoIdx(null)
   }
 
   // ── 点検時写真：追加 ──
@@ -127,14 +135,14 @@ export default function AdminRecordList({ initialRecords, offices }: Props) {
         alert('JPGまたはPNG形式のファイルを選択してください')
         continue
       }
-      if (file.size > 10 * 1024 * 1024) {
-        alert('10MB以下のファイルを選択してください')
+      if (file.size > 1 * 1024 * 1024) {
+        alert('1MB以下のファイルを選択してください')
         continue
       }
       newPhotos.push({ file, preview: URL.createObjectURL(file) })
     }
-    if (editInspPhotos.length + newPhotos.length > 5) {
-      alert('写真は最大5枚までです')
+    if (editInspPhotos.length + newPhotos.length > 2) {
+      alert('写真は最大2枚までです')
       return
     }
     setEditInspPhotos(prev => [...prev, ...newPhotos])
@@ -146,6 +154,45 @@ export default function AdminRecordList({ initialRecords, offices }: Props) {
     const photo = editInspPhotos[index]
     if (photo.file) URL.revokeObjectURL(photo.preview)
     setEditInspPhotos(prev => prev.filter((_, i) => i !== index))
+    if (selectedPhotoIdx === index) setSelectedPhotoIdx(null)
+    else if (selectedPhotoIdx !== null && selectedPhotoIdx > index) setSelectedPhotoIdx(selectedPhotoIdx - 1)
+  }
+
+  // ── 点検時写真：アノテーション保存 ──
+  async function handlePhotoAnnotationSave(blob: Blob, shapes: object[]) {
+    if (selectedPhotoIdx === null) return
+    const newPreview = URL.createObjectURL(blob)
+    const annotationData = JSON.stringify(shapes)
+    setEditInspPhotos(prev => prev.map((p, i) => {
+      if (i !== selectedPhotoIdx) return p
+      if (p.file) URL.revokeObjectURL(p.preview)
+      return { ...p, annotatedBlob: blob, preview: newPreview, annotationData }
+    }))
+    setShowPhotoAnnotator(false)
+  }
+
+  // ── 点検時写真：既存画像をアノテーターで編集 ──
+  async function openPhotoAnnotator() {
+    if (selectedPhotoIdx === null) return
+    const photo = editInspPhotos[selectedPhotoIdx]
+    if (photo.file || photo.annotatedBlob) {
+      setShowPhotoAnnotator(true)
+      return
+    }
+    // 元画像URL（アノテーションなし）があればそちらを優先
+    const bgUrl = photo.originalFilePath ?? photo.preview
+    setLoadingAnnotator(true)
+    try {
+      const res = await fetch(`/api/proxy-image?url=${encodeURIComponent(bgUrl)}`)
+      const blob = await res.blob()
+      const file = new File([blob], 'inspection_photo.jpg', { type: blob.type || 'image/jpeg' })
+      setEditInspPhotos(prev => prev.map((p, i) => i === selectedPhotoIdx ? { ...p, file } : p))
+      setShowPhotoAnnotator(true)
+    } catch {
+      alert('画像の読み込みに失敗しました')
+    } finally {
+      setLoadingAnnotator(false)
+    }
   }
 
   // ── 位置図：新規ファイル選択 ──
@@ -156,8 +203,8 @@ export default function AdminRecordList({ initialRecords, offices }: Props) {
       alert('JPGまたはPNG形式のファイルを選択してください')
       return
     }
-    if (file.size > 20 * 1024 * 1024) {
-      alert('20MB以下のファイルを選択してください')
+    if (file.size > 1 * 1024 * 1024) {
+      alert('1MB以下のファイルを選択してください')
       return
     }
     if (editPosition?.originalFile) URL.revokeObjectURL(editPosition.preview)
@@ -173,8 +220,9 @@ export default function AdminRecordList({ initialRecords, offices }: Props) {
     if (!editPosition) return
     setLoadingAnnotator(true)
     try {
-      // 現在のプレビューURLから画像をfetchしてFileに変換
-      const res = await fetch(editPosition.preview)
+      // 元画像URL（アノテーションなし）があればそちらを優先
+      const bgUrl = editPosition.originalFilePath ?? editPosition.preview
+      const res = await fetch(`/api/proxy-image?url=${encodeURIComponent(bgUrl)}`)
       const blob = await res.blob()
       const file = new File([blob], 'position_diagram.png', { type: blob.type || 'image/png' })
       setEditPosition(prev => prev ? { ...prev, originalFile: file } : null)
@@ -187,11 +235,12 @@ export default function AdminRecordList({ initialRecords, offices }: Props) {
   }
 
   // ── アノテーター保存 ──
-  function handleAnnotationSave(blob: Blob) {
+  function handleAnnotationSave(blob: Blob, shapes: object[]) {
     if (!editPosition) return
     if (editPosition.originalFile) URL.revokeObjectURL(editPosition.preview)
     const newPreview = URL.createObjectURL(blob)
-    setEditPosition(prev => prev ? { ...prev, annotatedBlob: blob, preview: newPreview } : null)
+    const annotationData = JSON.stringify(shapes)
+    setEditPosition(prev => prev ? { ...prev, annotatedBlob: blob, preview: newPreview, annotationData } : null)
     setShowAnnotator(false)
   }
 
@@ -224,13 +273,28 @@ export default function AdminRecordList({ initialRecords, offices }: Props) {
         await fetch(`/api/photos/${photoId}`, { method: 'DELETE' })
       }
 
-      // 3. 新規点検時写真のアップロード
-      for (const ep of editInspPhotos.filter(p => p.file)) {
+      // 3. 新規・アノテーション済み点検時写真のアップロード
+      for (const ep of editInspPhotos) {
+        if (!ep.file && !ep.annotatedBlob) continue
+        // アノテーション変更がある既存写真は削除して再アップロード
+        if (ep.id && ep.annotatedBlob) {
+          await fetch(`/api/photos/${ep.id}`, { method: 'DELETE' })
+        }
+        if (!ep.file && !ep.annotatedBlob) continue
         const fd = new FormData()
-        fd.append('file', ep.file!)
+        const fileToUpload = ep.annotatedBlob
+          ? new File([ep.annotatedBlob], 'inspection_photo.jpg', { type: 'image/jpeg' })
+          : ep.file!
+        fd.append('file', fileToUpload)
         fd.append('recordId', String(editRecord.id))
         fd.append('type', 'inspection')
-        await fetch('/api/photos', { method: 'POST', body: fd })
+        if (ep.annotatedBlob && ep.file) fd.append('originalFile', ep.file)
+        if (ep.annotationData) fd.append('annotationData', ep.annotationData)
+        const uploadRes = await fetch('/api/photos', { method: 'POST', body: fd })
+        if (!uploadRes.ok) {
+          const err = await uploadRes.json().catch(() => ({}))
+          throw new Error(err.error ?? 'アップロード失敗')
+        }
       }
 
       // 4. 位置図の処理
@@ -249,11 +313,13 @@ export default function AdminRecordList({ initialRecords, offices }: Props) {
         }
         const fd = new FormData()
         const fileToUpload = editPosition.annotatedBlob
-          ? new File([editPosition.annotatedBlob], 'position_diagram.png', { type: 'image/png' })
+          ? new File([editPosition.annotatedBlob], 'position_diagram.jpg', { type: 'image/jpeg' })
           : editPosition.originalFile!
         fd.append('file', fileToUpload)
         fd.append('recordId', String(editRecord.id))
         fd.append('type', 'position')
+        if (editPosition.annotatedBlob && editPosition.originalFile) fd.append('originalFile', editPosition.originalFile)
+        if (editPosition.annotationData) fd.append('annotationData', editPosition.annotationData)
         await fetch('/api/photos', { method: 'POST', body: fd })
       }
       // 変更なしの場合（editPosition.id のみ）はそのまま
@@ -303,15 +369,34 @@ export default function AdminRecordList({ initialRecords, offices }: Props) {
     }
   }
 
-  // ── アノテーターが開いているときは全画面表示 ──
+  // ── 写真アノテーター ──
+  if (showPhotoAnnotator && selectedPhotoIdx !== null) {
+    const photo = editInspPhotos[selectedPhotoIdx]
+    const imageFile = photo.annotatedBlob
+      ? new File([photo.annotatedBlob], 'inspection_photo.jpg', { type: 'image/jpeg' })
+      : photo.file!
+    const initialShapes = photo.annotationData ? JSON.parse(photo.annotationData) : undefined
+    return (
+      <ImageAnnotator
+        imageFile={imageFile}
+        initialShapes={initialShapes}
+        onSave={handlePhotoAnnotationSave}
+        onCancel={() => setShowPhotoAnnotator(false)}
+      />
+    )
+  }
+
+  // ── 位置図アノテーターが開いているときは全画面表示 ──
   if (showAnnotator && editPosition?.originalFile) {
+    const initialShapes = editPosition.annotationData ? JSON.parse(editPosition.annotationData) : undefined
     return (
       <ImageAnnotator
         imageFile={
           editPosition.annotatedBlob
-            ? new File([editPosition.annotatedBlob], 'position_diagram.png', { type: 'image/png' })
+            ? new File([editPosition.annotatedBlob], 'position_diagram.jpg', { type: 'image/jpeg' })
             : editPosition.originalFile
         }
+        initialShapes={initialShapes}
         onSave={handleAnnotationSave}
         onCancel={() => setShowAnnotator(false)}
       />
@@ -579,26 +664,35 @@ export default function AdminRecordList({ initialRecords, offices }: Props) {
               <div className="border-t pt-3">
                 <p className="text-xs font-medium text-gray-700 mb-2">
                   📷 写真（点検時）
-                  <span className="ml-1 text-gray-400 font-normal">JPG/PNG・10MB・最大5枚</span>
+                  <span className="ml-1 text-gray-400 font-normal">JPG/PNG・1MB・最大2枚</span>
                 </p>
-                <div className="grid grid-cols-4 gap-2 mb-2">
+                <div className="grid grid-cols-3 gap-2 mb-2">
                   {editInspPhotos.map((p, i) => (
-                    <div key={i} className="relative">
+                    <div
+                      key={i}
+                      className={`relative cursor-pointer rounded border-2 transition-colors ${
+                        selectedPhotoIdx === i ? 'border-blue-500' : 'border-transparent'
+                      }`}
+                      onClick={() => setSelectedPhotoIdx(i === selectedPhotoIdx ? null : i)}
+                    >
                       <img src={p.preview} alt=""
-                        className="w-full h-14 object-cover rounded border"
+                        className="w-full h-16 object-cover rounded"
                         onError={e => { (e.target as HTMLImageElement).style.display = 'none' }} />
-                      <button
-                        type="button"
-                        onClick={() => removeInspPhoto(i)}
-                        className="absolute top-0.5 right-0.5 bg-red-500 text-white rounded-full w-4 h-4 text-xs flex items-center justify-center leading-none"
-                      >×</button>
-                      {p.file && (
+                      {p.annotatedBlob && (
+                        <span className="absolute top-0.5 left-0.5 bg-green-500 text-white text-[9px] px-1 rounded">✓書込済</span>
+                      )}
+                      {p.file && !p.annotatedBlob && (
                         <span className="absolute bottom-0.5 left-0.5 bg-blue-500 text-white text-[9px] px-1 rounded">新規</span>
                       )}
+                      <button
+                        type="button"
+                        onClick={e => { e.stopPropagation(); removeInspPhoto(i) }}
+                        className="absolute top-0.5 right-0.5 bg-red-500 text-white rounded-full w-4 h-4 text-xs flex items-center justify-center leading-none"
+                      >×</button>
                     </div>
                   ))}
-                  {editInspPhotos.length < 5 && (
-                    <label className="flex items-center justify-center w-full h-14 border-2 border-dashed border-gray-300 rounded cursor-pointer hover:bg-gray-50 text-gray-400 text-xs">
+                  {editInspPhotos.length < 2 && (
+                    <label className="flex items-center justify-center w-full h-16 border-2 border-dashed border-gray-300 rounded cursor-pointer hover:bg-gray-50 text-gray-400 text-xs">
                       ＋追加
                       <input type="file" accept="image/jpeg,image/png" multiple
                         className="hidden" onChange={handleAddInspPhoto} />
@@ -608,13 +702,30 @@ export default function AdminRecordList({ initialRecords, offices }: Props) {
                 {editInspPhotos.length === 0 && (
                   <p className="text-xs text-gray-400">写真なし</p>
                 )}
+                {editInspPhotos.length > 0 && (
+                  <div>
+                    <button
+                      type="button"
+                      disabled={selectedPhotoIdx === null || loadingAnnotator}
+                      onClick={openPhotoAnnotator}
+                      className="w-full bg-blue-600 text-white py-1.5 rounded text-xs font-bold hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                      {loadingAnnotator ? '読込中...' : selectedPhotoIdx !== null && editInspPhotos[selectedPhotoIdx]?.annotatedBlob
+                        ? '✏️ 書き込みを編集'
+                        : '✏️ 選択した写真に書き込む'}
+                    </button>
+                    {selectedPhotoIdx === null && (
+                      <p className="text-xs text-gray-400 text-center mt-1">写真をクリックして選択してください</p>
+                    )}
+                  </div>
+                )}
               </div>
 
               {/* ── 位置図 ── */}
               <div className="border-t pt-3">
                 <p className="text-xs font-medium text-gray-700 mb-2">
                   🗺️ 位置図
-                  <span className="ml-1 text-gray-400 font-normal">JPG/PNG・20MB</span>
+                  <span className="ml-1 text-gray-400 font-normal">JPG/PNG・1MB</span>
                 </p>
                 {editPosition ? (
                   <div>

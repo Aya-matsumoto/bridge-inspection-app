@@ -21,7 +21,8 @@ interface Shape {
 
 interface Props {
   imageFile: File
-  onSave: (blob: Blob) => void
+  initialShapes?: Shape[]
+  onSave: (blob: Blob, shapes: Shape[]) => void
   onCancel: () => void
 }
 
@@ -31,13 +32,13 @@ const HANDLE_SIZE = 8
 const HANDLE_TOL = 12
 const SEL_PAD = 8
 
-export default function ImageAnnotator({ imageFile, onSave, onCancel }: Props) {
+export default function ImageAnnotator({ imageFile, initialShapes, onSave, onCancel }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const imgRef = useRef<HTMLImageElement | null>(null)
-  const shapeIdRef = useRef(0)
-  const shapesRef = useRef<Shape[]>([])
+  const shapeIdRef = useRef(initialShapes?.length ? Math.max(...initialShapes.map(s => s.id)) : 0)
+  const shapesRef = useRef<Shape[]>(initialShapes ?? [])
 
-  const [shapes, setShapes] = useState<Shape[]>([])
+  const [shapes, setShapes] = useState<Shape[]>(initialShapes ?? [])
   const [history, setHistory] = useState<Shape[][]>([])
   const [tool, setTool] = useState<ToolMode>('circle')
   const [fontSize, setFontSize] = useState(24)
@@ -472,7 +473,7 @@ export default function ImageAnnotator({ imageFile, onSave, onCancel }: Props) {
     ctx.drawImage(img, 0, 0, canvas.width, canvas.height)
     shapes.forEach(s => drawShape(ctx, s))  // 選択ハンドルは描かない
 
-    canvas.toBlob(blob => { if (blob) onSave(blob) }, 'image/png', 0.95)
+    canvas.toBlob(blob => { if (blob) onSave(blob, shapes) }, 'image/jpeg', 0.88)
   }
 
   const rotDeg = selectedShape ? Math.round(selectedShape.rotation * 180 / Math.PI) : 0

@@ -32,13 +32,15 @@ model InspectionRecord {
 }
 
 model Photo {
-  id           Int              @id @default(autoincrement())
-  recordId     Int
-  record       InspectionRecord @relation(fields: [recordId], references: [id], onDelete: Cascade)
-  type         String
-  filePath     String
-  originalName String
-  createdAt    DateTime         @default(now())
+  id             Int              @id @default(autoincrement())
+  recordId       Int
+  record         InspectionRecord @relation(fields: [recordId], references: [id], onDelete: Cascade)
+  type           String
+  filePath       String
+  originalName   String
+  annotationData   String?
+  originalFilePath String?
+  createdAt        DateTime         @default(now())
 }
 
 model SubOfficeMaster {
