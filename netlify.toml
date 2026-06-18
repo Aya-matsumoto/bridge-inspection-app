@@ -1,5 +1,8 @@
 [build]
   command = "npx prisma db push && npx tsx prisma/seed.ts && next build"
 
+[[plugins]]
+  package = "@netlify/plugin-nextjs"
+
 [functions]
   directory = "netlify/functions"
