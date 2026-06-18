@@ -684,6 +684,38 @@ export default function InputPage() {
             className="flex-1 bg-blue-600 text-white py-3 rounded-lg font-bold text-sm hover:bg-blue-700 disabled:opacity-50"
           >{saving ? '送信中...' : '送信'}</button>
         </div>
+
+        {/* ── 更新履歴 ── */}
+        <div className="border-t border-gray-200 pt-4 pb-8">
+          <h3 className="text-xs font-bold text-gray-500 mb-3">更新履歴</h3>
+          <div className="space-y-3">
+            {[
+              {
+                date: '2026-06-18',
+                items: [
+                  '写真に書き込み（丸囲み・四角囲み・矢印・文字）機能を追加',
+                  '写真・位置図の書き込みに線の太さ調整（S / M / L / XL）を追加',
+                  '書き込み済み画像の再編集に対応（シェイプを移動・削除・変形可能）',
+                  'データ一覧の編集画面からも写真の書き込み・再編集が可能に',
+                  'データ一覧から下書きを送信済みに変更できるボタンを追加',
+                  '発見日のカレンダーで当日が選択できない不具合を修正',
+                ],
+              },
+            ].map(({ date, items }) => (
+              <div key={date}>
+                <p className="text-xs font-semibold text-gray-600 mb-1">{date}</p>
+                <ul className="space-y-0.5">
+                  {items.map((item, i) => (
+                    <li key={i} className="text-xs text-gray-500 flex gap-1.5">
+                      <span className="text-gray-400 flex-shrink-0">・</span>
+                      <span>{item}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </div>
+        </div>
       </main>
 
     </div>
