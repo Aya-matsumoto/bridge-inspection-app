@@ -42,6 +42,7 @@ export default function ImageAnnotator({ imageFile, initialShapes, onSave, onCan
   const [history, setHistory] = useState<Shape[][]>([])
   const [tool, setTool] = useState<ToolMode>('circle')
   const [fontSize, setFontSize] = useState(24)
+  const [lineWidth, setLineWidth] = useState(3)
 
   const [isDrawing, setIsDrawing] = useState(false)
   const [drawStart, setDrawStart] = useState({ x: 0, y: 0 })
@@ -130,7 +131,7 @@ export default function ImageAnnotator({ imageFile, initialShapes, onSave, onCan
         id: -1, type: tool as DrawTool,
         x1: drawStart.x, y1: drawStart.y,
         x2: drawEnd.x, y2: drawEnd.y,
-        rotation: 0, color: RED, lineWidth: 3, fontSize,
+        rotation: 0, color: RED, lineWidth, fontSize,
       })
     }
   }, [shapes, isDrawing, drawStart, drawEnd, tool, ready, selectedId, fontSize])
@@ -425,7 +426,7 @@ export default function ImageAnnotator({ imageFile, initialShapes, onSave, onCan
         x1: drawStart.x, y1: drawStart.y,
         x2: pos.x, y2: pos.y,
         rotation: 0,
-        color: RED, lineWidth: 3, fontSize,
+        color: RED, lineWidth, fontSize,
       }])
       setIsDrawing(false)
     }
@@ -454,6 +455,14 @@ export default function ImageAnnotator({ imageFile, initialShapes, onSave, onCan
     }
   }
 
+  function applyLineWidth(newWidth: number) {
+    setLineWidth(newWidth)
+    if (selectedShape && selectedShape.type !== 'text') {
+      pushHistory(shapes)
+      updateShapes(prev => prev.map(s => s.id === selectedId ? { ...s, lineWidth: newWidth } : s))
+    }
+  }
+
   function deleteSelected() {
     if (selectedId === null) return
     pushHistory(shapes)
@@ -477,6 +486,9 @@ export default function ImageAnnotator({ imageFile, initialShapes, onSave, onCan
   }
 
   const rotDeg = selectedShape ? Math.round(selectedShape.rotation * 180 / Math.PI) : 0
+  const displayLineWidth = (tool === 'select' && selectedShape && selectedShape.type !== 'text')
+    ? selectedShape.lineWidth
+    : lineWidth
 
   function getCursor() {
     if (tool !== 'select') return 'crosshair'
@@ -487,6 +499,7 @@ export default function ImageAnnotator({ imageFile, initialShapes, onSave, onCan
   }
 
   const showFontSize = tool === 'text' || (tool === 'select' && selectedShape?.type === 'text')
+  const showLineWidth = ['circle', 'rect', 'arrow'].includes(tool) || (tool === 'select' && selectedShape != null && selectedShape.type !== 'text')
 
   const ToolBtn = ({ t, icon, label }: { t: ToolMode; icon: string; label: string }) => (
     <button type="button" onClick={() => { setTool(t); setTextMode(false) }}
@@ -507,6 +520,15 @@ export default function ImageAnnotator({ imageFile, initialShapes, onSave, onCan
     </button>
   )
 
+  const LineWidthBtn = ({ width, label }: { width: number; label: string }) => (
+    <button type="button" onClick={() => applyLineWidth(width)}
+      className={`w-8 h-7 rounded text-xs font-bold ${
+        displayLineWidth === width ? 'bg-white text-blue-700' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+      }`}>
+      {label}
+    </button>
+  )
+
   return (
     <div className="fixed inset-0 z-50 flex flex-col bg-gray-900">
 
@@ -519,6 +541,16 @@ export default function ImageAnnotator({ imageFile, initialShapes, onSave, onCan
           <ToolBtn t="arrow"  icon="→" label="矢印" />
           <ToolBtn t="text"   icon="Ａ" label="文字" />
         </div>
+
+        {showLineWidth && (
+          <div className="flex items-center gap-1 bg-gray-900 rounded px-2 py-1">
+            <span className="text-gray-400 text-xs whitespace-nowrap">線の太さ</span>
+            <LineWidthBtn width={2} label="S" />
+            <LineWidthBtn width={3} label="M" />
+            <LineWidthBtn width={5} label="L" />
+            <LineWidthBtn width={8} label="XL" />
+          </div>
+        )}
 
         {showFontSize && (
           <div className="flex items-center gap-1 bg-gray-900 rounded px-2 py-1">

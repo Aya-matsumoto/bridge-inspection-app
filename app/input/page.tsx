@@ -316,13 +316,10 @@ export default function InputPage() {
   // ── 写真アノテーター ──
   if (showPhotoAnnotator && selectedPhotoIdx !== null) {
     const photo = inspectionPhotos[selectedPhotoIdx]
-    const imageFile = photo.annotatedBlob
-      ? new File([photo.annotatedBlob], 'inspection_photo.jpg', { type: 'image/jpeg' })
-      : photo.file
     const initialShapes = photo.annotationData ? JSON.parse(photo.annotationData) : undefined
     return (
       <ImageAnnotator
-        imageFile={imageFile}
+        imageFile={photo.file}
         initialShapes={initialShapes}
         onSave={handlePhotoAnnotationSave}
         onCancel={() => setShowPhotoAnnotator(false)}
@@ -337,9 +334,7 @@ export default function InputPage() {
     const initialShapes = positionDiagram.annotationData ? JSON.parse(positionDiagram.annotationData) : undefined
     return (
       <ImageAnnotator
-        imageFile={positionDiagram.annotatedBlob
-          ? new File([positionDiagram.annotatedBlob], 'position_diagram.jpg', { type: 'image/jpeg' })
-          : positionDiagram.originalFile}
+        imageFile={positionDiagram.originalFile}
         initialShapes={initialShapes}
         onSave={handleAnnotationSave}
         onCancel={() => setShowAnnotator(false)}

@@ -275,12 +275,13 @@ export default function AdminRecordList({ initialRecords, offices }: Props) {
 
       // 3. 新規・アノテーション済み点検時写真のアップロード
       for (const ep of editInspPhotos) {
-        if (!ep.file && !ep.annotatedBlob) continue
+        // 既存写真はアノテーション済みの場合のみ再アップロード、新規写真はファイルがある場合のみ
+        const needsUpload = ep.annotatedBlob != null || (!ep.id && ep.file != null)
+        if (!needsUpload) continue
         // アノテーション変更がある既存写真は削除して再アップロード
         if (ep.id && ep.annotatedBlob) {
           await fetch(`/api/photos/${ep.id}`, { method: 'DELETE' })
         }
-        if (!ep.file && !ep.annotatedBlob) continue
         const fd = new FormData()
         const fileToUpload = ep.annotatedBlob
           ? new File([ep.annotatedBlob], 'inspection_photo.jpg', { type: 'image/jpeg' })
