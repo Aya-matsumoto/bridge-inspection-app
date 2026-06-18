@@ -273,6 +273,21 @@ export default function AdminRecordList({ initialRecords, offices }: Props) {
     }
   }
 
+  async function submitRecord(id: number) {
+    if (!confirm('このレコードを送信済みにしますか？')) return
+    try {
+      const res = await fetch(`/api/records/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'submitted' }),
+      })
+      if (!res.ok) throw new Error()
+      setRecords(prev => prev.map(r => r.id === id ? { ...r, status: 'submitted' } : r))
+    } catch {
+      alert('エラーが発生しました。しばらくしてから再度お試しください。')
+    }
+  }
+
   async function deleteRecord(id: number) {
     if (!confirm('このレコードを削除しますか？（取り消し可能）')) return
     try {
@@ -404,11 +419,17 @@ export default function AdminRecordList({ initialRecords, offices }: Props) {
                       </span>
                     </td>
                     <td className="p-3">
-                      <div className="flex gap-1">
+                      <div className="flex gap-1 flex-wrap">
                         <button
                           onClick={() => openEdit(record)}
                           className="text-xs bg-blue-500 text-white px-2 py-1 rounded hover:bg-blue-600 whitespace-nowrap"
                         >編集</button>
+                        {record.status === 'draft' && (
+                          <button
+                            onClick={() => submitRecord(record.id)}
+                            className="text-xs bg-green-600 text-white px-2 py-1 rounded hover:bg-green-700 whitespace-nowrap"
+                          >送信済にする</button>
+                        )}
                         {record.status !== 'deleted' && (
                           <button
                             onClick={() => deleteRecord(record.id)}
