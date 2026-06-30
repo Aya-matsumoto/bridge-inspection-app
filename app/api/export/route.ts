@@ -1,6 +1,7 @@
 // @ts-nocheck
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { getCurrentUser, parseAllowedOffices } from '@/lib/userAuth'
 import ExcelJS from 'exceljs'
 import { join } from 'path'
 import { readFile } from 'fs/promises'
@@ -269,29 +270,52 @@ async function fillPhotoSheet(
 // ─────────────────────────────────────────────────────────────
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url)
-  const office = searchParams.get('office')
-  const year   = parseInt(searchParams.get('year')  || '0')
-  const month  = parseInt(searchParams.get('month') || '0')
+  const office  = searchParams.get('office')
+  const bridges = searchParams.getAll('bridge')   // 橋梁名モード（複数可）
+  const year    = parseInt(searchParams.get('year')  || '0')
+  const month   = parseInt(searchParams.get('month') || '0')
 
-  if (!office || !year || !month) {
+  // 橋梁名が1件以上指定されていれば橋梁名モード、それ以外は年月モード
+  const isBridgeMode = bridges.length > 0
+
+  if (!office) {
+    return NextResponse.json({ error: 'Invalid params' }, { status: 400 })
+  }
+  if (!isBridgeMode && (!year || !month)) {
     return NextResponse.json({ error: 'Invalid params' }, { status: 400 })
   }
 
-  const startDate = new Date(year, month - 1, 1)
-  const endDate   = new Date(year, month, 0, 23, 59, 59)
+  // 閲覧権限チェック：指定された出張所が許可リストに含まれない場合は拒否
+  const user = await getCurrentUser()
+  const allowed = user ? parseAllowedOffices(user.allowedOffices) : null
+  if (allowed && !allowed.includes(office)) {
+    return NextResponse.json({ error: 'この出張所を閲覧する権限がありません' }, { status: 403 })
+  }
+
+  // モードに応じて取得条件を切り替える（取得後の書き込み処理は共通）
+  const where = isBridgeMode
+    ? {
+        subOffice: office,
+        status: 'submitted',
+        bridgeName: { in: bridges },
+      }
+    : {
+        subOffice: office,
+        status: 'submitted',
+        discoveryDate: {
+          gte: new Date(year, month - 1, 1),
+          lte: new Date(year, month, 0, 23, 59, 59),
+        },
+      }
 
   const records = await prisma.inspectionRecord.findMany({
-    where: {
-      subOffice: office,
-      status: 'submitted',
-      discoveryDate: { gte: startDate, lte: endDate },
-    },
+    where,
     orderBy: [{ discoveryDate: 'asc' }, { bridgeName: 'asc' }],
     include: { photos: true },
   })
 
   if (records.length === 0) {
-    return NextResponse.json({ error: '該当する期間のデータがありません' }, { status: 404 })
+    return NextResponse.json({ error: '該当するデータがありません' }, { status: 404 })
   }
 
   // ── 担当事務所（京都か否か）でテンプレートを切り替え ──
@@ -382,8 +406,11 @@ export async function GET(req: NextRequest) {
   // ExcelJS のバッファを生成後、ZIP レベルで画像を絶対位置固定に書き換える
   const rawBuffer = await workbook.xlsx.writeBuffer()
   const buffer    = await fixImageAnchors(rawBuffer)
+  const suffix = isBridgeMode
+    ? (bridges.length === 1 ? bridges[0] : `${bridges[0]}他${bridges.length - 1}件`)
+    : `${year}年${month}月分`
   const fileName = encodeURIComponent(
-    `維持作業対応(対策区分Ｍ相当)損傷・変状の措置状況　記録表_${office}_${year}年${month}月分.xlsx`
+    `維持作業対応(対策区分Ｍ相当)損傷・変状の措置状況　記録表_${office}_${suffix}.xlsx`
   )
 
   return new NextResponse(buffer as unknown as ArrayBuffer, {
