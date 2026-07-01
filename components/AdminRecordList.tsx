@@ -34,6 +34,7 @@ interface Record {
 interface Office {
   id: number
   name: string
+  format?: string
 }
 
 interface Props {
@@ -404,6 +405,11 @@ export default function AdminRecordList({ initialRecords, offices }: Props) {
     )
   }
 
+  // 編集中レコードの出張所フォーマットで距離標の入力様式を切り替える
+  const editFormat = offices.find(o => o.name === editForm.subOffice)?.format ?? 'normal'
+  const editIsRange = editFormat === 'kp_range'
+  const editIsPoint = editFormat === 'kp_point'
+
   return (
     <div className="min-h-screen bg-gray-50">
       <NavHeader current="admin" />
@@ -565,12 +571,12 @@ export default function AdminRecordList({ initialRecords, offices }: Props) {
                   />
                 </div>
               </div>
-              {/* 距離標（京都のみ） */}
-              {editForm.mainOffice === '京都' && (
+              {/* 距離標（起終点）: kp_range フォーマット */}
+              {editIsRange && (
                 <div>
                   <label className="block text-xs font-medium text-gray-700 mb-1">
                     距離標
-                    <span className="ml-1 text-green-600 font-normal">（京都）</span>
+                    <span className="ml-1 text-green-600 font-normal">（起終点）</span>
                   </label>
                   <div className="flex items-center gap-2">
                     <input
@@ -604,6 +610,30 @@ export default function AdminRecordList({ initialRecords, offices }: Props) {
                         } else {
                           setEditForm(prev => ({ ...prev, distanceMarker: null }))
                         }
+                      }}
+                      className="w-full border border-gray-300 rounded p-2 text-sm"
+                      placeholder="0.000"
+                    />
+                    <span className="text-sm text-gray-500">kp</span>
+                  </div>
+                </div>
+              )}
+              {/* 距離標（ポイント）: kp_point フォーマット（開始kpのみ） */}
+              {editIsPoint && (
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-1">
+                    距離標
+                    <span className="ml-1 text-green-600 font-normal">（ポイント）</span>
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="number"
+                      step="0.001"
+                      min="0"
+                      value={editForm.distanceMarker ? editForm.distanceMarker.replace('kp', '') : ''}
+                      onChange={e => {
+                        const v = e.target.value
+                        setEditForm(prev => ({ ...prev, distanceMarker: v ? `${parseFloat(v).toFixed(3)}kp` : null }))
                       }}
                       className="w-full border border-gray-300 rounded p-2 text-sm"
                       placeholder="0.000"
