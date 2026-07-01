@@ -1,3 +1,6 @@
+import { config } from 'dotenv'
+config({ path: '.env.local' }) // Next と同じ .env.local から DATABASE_URL を読む
+
 import { PrismaClient } from '@prisma/client'
 
 const prisma = new PrismaClient()

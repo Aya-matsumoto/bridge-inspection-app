@@ -197,7 +197,8 @@ async function fillPhotoSheet(
     photos: { type: string; filePath: string }[]
   },
   sheetNum: number,
-  isKyoto = false
+  isRange = false,   // kp_range: 距離標を E2 に出力
+  isPoint = false    // kp_point: 距離標を B8/B10 に付加
 ) {
   const discoveryDate = new Date(record.discoveryDate)
 
@@ -214,8 +215,8 @@ async function fillPhotoSheet(
   ps.getCell('E1').value = sheetNum
   // C2: 損傷種別
   ps.getCell('C2').value = record.damageType
-  // E2: 距離標（京都のみ）
-  if (isKyoto && record.distanceMarker) {
+  // E2: 距離標（kp_range のみ）
+  if (isRange && record.distanceMarker) {
     ps.getCell('E2').value = record.distanceMarker
   }
   // A6: 撮影日（A6:C6 マージ）
@@ -229,9 +230,9 @@ async function fillPhotoSheet(
   const spanPart  = record.spanNo  ? `${record.spanNo}径間` : ''
   const elemPart  = [record.location, record.elementNo].filter(Boolean).join('')
   const spanElem  = [spanPart, elemPart].filter(Boolean).join('　')
-  // 姫路・山崎（非京都）は距離標を径間・要素番号の後ろに付加して B8/B10 に出力
-  // （京都は距離標を E2 に出力するためここでは付加しない）
-  const spanElemText = (!isKyoto && record.distanceMarker)
+  // kp_point は距離標を径間・要素番号の後ろに付加して B8/B10 に出力
+  // （kp_range は距離標を E2 に出力するためここでは付加しない）
+  const spanElemText = (isPoint && record.distanceMarker)
     ? [spanElem, record.distanceMarker].filter(Boolean).join('　')
     : spanElem
   if (spanElemText) {
@@ -323,9 +324,15 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: '該当するデータがありません' }, { status: 404 })
   }
 
-  // ── 担当事務所（京都か否か）でテンプレートを切り替え ──
-  const isKyoto = records[0].mainOffice === '京都'
-  const templateName = isKyoto ? 'record_template_kyoto.xlsx' : 'record_template.xlsx'
+  // ── 出張所のフォーマット設定で様式を切り替え ──
+  //  kp_range : 京都テンプレート（E列=距離標）＋ E2 出力
+  //  kp_point : 通常テンプレート ＋ 距離標を番号シート B8/B10 に付加
+  //  normal   : 通常テンプレート（距離標なし）
+  const officeMaster = await prisma.subOfficeMaster.findUnique({ where: { name: office } })
+  const officeFormat = officeMaster?.format ?? 'normal'
+  const isRange = officeFormat === 'kp_range'
+  const isPoint = officeFormat === 'kp_point'
+  const templateName = isRange ? 'record_template_kyoto.xlsx' : 'record_template.xlsx'
   const templatePath = join(process.cwd(), 'templates', templateName)
   const templateBuf  = await readFile(templatePath)
 
@@ -349,7 +356,7 @@ export async function GET(req: NextRequest) {
     const measureDate   = record.measureDate ? new Date(record.measureDate) : null
 
     // 京都テンプレートは E列=距離標 が追加されているため列が1つずれる
-    const values: [number, ExcelJS.CellValue][] = isKyoto ? [
+    const values: [number, ExcelJS.CellValue][] = isRange ? [
       [1,  record.mainOffice],
       [2,  record.subOffice],
       [3,  record.routeNo],
@@ -394,7 +401,7 @@ export async function GET(req: NextRequest) {
   for (let i = 0; i < records.length; i++) {
     const sheetNum = i + 1
     const ps = workbook.getWorksheet(`(${sheetNum})`)!
-    await fillPhotoSheet(workbook, ps, records[i], sheetNum, isKyoto)
+    await fillPhotoSheet(workbook, ps, records[i], sheetNum, isRange, isPoint)
   }
 
   // 使わなかったテンプレート写真シートを削除

@@ -6,6 +6,7 @@ interface Office {
   id: number
   name: string
   mainOffice: string
+  format: string
   isActive: boolean
   sortOrder: number
 }
@@ -14,11 +15,18 @@ interface Props {
   initialOffices: Office[]
 }
 
+// フォーマット内部値 → 画面表示ラベル
+const FORMAT_OPTIONS = [
+  { value: 'normal',   label: '通常' },
+  { value: 'kp_range', label: '距離標(起終点)あり' },
+  { value: 'kp_point', label: '距離標(ポイント)あり' },
+]
+
 export default function AdminOffices({ initialOffices }: Props) {
   const [offices, setOffices] = useState(initialOffices)
   const [showForm, setShowForm] = useState(false)
   const [editOffice, setEditOffice] = useState<Office | null>(null)
-  const [form, setForm] = useState({ name: '', mainOffice: '', sortOrder: '0' })
+  const [form, setForm] = useState({ name: '', mainOffice: '', format: 'normal', sortOrder: '0' })
   const [saving, setSaving] = useState(false)
 
   async function handleSave() {
@@ -45,7 +53,7 @@ export default function AdminOffices({ initialOffices }: Props) {
       }
       setShowForm(false)
       setEditOffice(null)
-      setForm({ name: '', mainOffice: '', sortOrder: '0' })
+      setForm({ name: '', mainOffice: '', format: 'normal', sortOrder: '0' })
     } catch {
       alert('エラーが発生しました。')
     } finally {
@@ -68,15 +76,35 @@ export default function AdminOffices({ initialOffices }: Props) {
     }
   }
 
+  // 一覧から直接フォーマットを切り替える（即時保存）
+  async function changeFormat(office: Office, format: string) {
+    const prevOffices = offices
+    // 楽観的更新（失敗時に戻す）
+    setOffices(prev => prev.map(o => o.id === office.id ? { ...o, format } : o))
+    try {
+      const res = await fetch(`/api/offices/${office.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ format }),
+      })
+      if (!res.ok) throw new Error()
+      const updated = await res.json()
+      setOffices(prev => prev.map(o => o.id === updated.id ? updated : o))
+    } catch {
+      setOffices(prevOffices)
+      alert('エラーが発生しました。')
+    }
+  }
+
   function openEdit(office: Office) {
     setEditOffice(office)
-    setForm({ name: office.name, mainOffice: office.mainOffice, sortOrder: String(office.sortOrder) })
+    setForm({ name: office.name, mainOffice: office.mainOffice, format: office.format ?? 'normal', sortOrder: String(office.sortOrder) })
     setShowForm(true)
   }
 
   function openNew() {
     setEditOffice(null)
-    setForm({ name: '', mainOffice: '', sortOrder: String(offices.length + 1) })
+    setForm({ name: '', mainOffice: '', format: 'normal', sortOrder: String(offices.length + 1) })
     setShowForm(true)
   }
 
@@ -99,6 +127,7 @@ export default function AdminOffices({ initialOffices }: Props) {
               <tr>
                 <th className="p-3 text-left text-xs font-medium text-gray-600">出張所名</th>
                 <th className="p-3 text-left text-xs font-medium text-gray-600">担当事務所</th>
+                <th className="p-3 text-left text-xs font-medium text-gray-600">フォーマット</th>
                 <th className="p-3 text-left text-xs font-medium text-gray-600">表示順</th>
                 <th className="p-3 text-left text-xs font-medium text-gray-600">状態</th>
                 <th className="p-3 text-left text-xs font-medium text-gray-600">操作</th>
@@ -109,6 +138,17 @@ export default function AdminOffices({ initialOffices }: Props) {
                 <tr key={office.id} className={!office.isActive ? 'opacity-50' : ''}>
                   <td className="p-3 font-medium">{office.name}</td>
                   <td className="p-3 text-gray-600">{office.mainOffice}</td>
+                  <td className="p-3 text-gray-600">
+                    <select
+                      value={office.format ?? 'normal'}
+                      onChange={e => changeFormat(office, e.target.value)}
+                      className="border border-gray-300 rounded p-1 text-xs bg-white"
+                    >
+                      {FORMAT_OPTIONS.map(o => (
+                        <option key={o.value} value={o.value}>{o.label}</option>
+                      ))}
+                    </select>
+                  </td>
                   <td className="p-3 text-gray-600">{office.sortOrder}</td>
                   <td className="p-3">
                     <span className={`px-2 py-0.5 rounded text-xs font-bold ${
@@ -166,6 +206,21 @@ export default function AdminOffices({ initialOffices }: Props) {
                   className="w-full border border-gray-300 rounded p-2 text-sm"
                   placeholder="例: 京都"
                 />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">フォーマット</label>
+                <select
+                  value={form.format}
+                  onChange={e => setForm(prev => ({ ...prev, format: e.target.value }))}
+                  className="w-full border border-gray-300 rounded p-2 text-sm"
+                >
+                  {FORMAT_OPTIONS.map(o => (
+                    <option key={o.value} value={o.value}>{o.label}</option>
+                  ))}
+                </select>
+                <p className="text-xs text-gray-500 mt-1">
+                  入力フォームの距離標欄とExcel出力の様式を切り替えます
+                </p>
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">表示順</label>

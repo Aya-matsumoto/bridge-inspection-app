@@ -47,6 +47,7 @@ model SubOfficeMaster {
   id          Int      @id @default(autoincrement())
   name        String   @unique
   mainOffice  String
+  format      String   @default("normal") // normal | kp_range | kp_point
   isActive    Boolean  @default(true)
   sortOrder   Int      @default(0)
   createdAt   DateTime @default(now())

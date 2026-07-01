@@ -8,9 +8,10 @@
     "start": "next start",
     "lint": "next lint",
     "postinstall": "prisma generate",
-    "db:push": "prisma db push",
+    "db:push": "node --env-file=.env.local node_modules/prisma/build/index.js db push",
     "db:seed": "tsx prisma/seed.ts",
-    "db:migrate": "prisma migrate dev"
+    "db:backfill-format": "tsx prisma/backfill-format.ts",
+    "db:migrate": "node --env-file=.env.local node_modules/prisma/build/index.js migrate dev"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1071.0",
