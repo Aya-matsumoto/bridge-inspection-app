@@ -229,10 +229,15 @@ async function fillPhotoSheet(
   const spanPart  = record.spanNo  ? `${record.spanNo}径間` : ''
   const elemPart  = [record.location, record.elementNo].filter(Boolean).join('')
   const spanElem  = [spanPart, elemPart].filter(Boolean).join('　')
-  if (spanElem) {
-    ps.getCell('B8').value = spanElem
+  // 姫路・山崎（非京都）は距離標を径間・要素番号の後ろに付加して B8/B10 に出力
+  // （京都は距離標を E2 に出力するためここでは付加しない）
+  const spanElemText = (!isKyoto && record.distanceMarker)
+    ? [spanElem, record.distanceMarker].filter(Boolean).join('　')
+    : spanElem
+  if (spanElemText) {
+    ps.getCell('B8').value = spanElemText
     if (inspPhotos.length >= 2) {
-      ps.getCell('B10').value = spanElem
+      ps.getCell('B10').value = spanElemText
     }
   }
 

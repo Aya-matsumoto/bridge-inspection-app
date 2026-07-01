@@ -112,7 +112,7 @@ export default function InputPage() {
       // 距離標をパース
       if (bridge.distanceMarker) {
         const parts = bridge.distanceMarker.split('kp～')
-        setDistanceFrom(parts[0] ?? '')
+        setDistanceFrom((parts[0] ?? '').replace('kp', ''))
         setDistanceTo((parts[1] ?? '').replace('kp', ''))
       } else {
         setDistanceFrom(''); setDistanceTo('')
@@ -124,6 +124,11 @@ export default function InputPage() {
   }
 
   const isKyoto = formData.mainOffice === '京都'
+  // 姫路・山崎は距離標を1つ目（開始kp）のみ入力する出張所
+  const SINGLE_KP_OFFICES = ['姫路', '山崎']
+  const isSingleKp = SINGLE_KP_OFFICES.includes(formData.subOffice)
+  // 距離標入力（1つ目）が有効になるのは京都・姫路・山崎
+  const distanceEnabled = isKyoto || isSingleKp
 
   function validateForm() {
     const errs: Record<string, string> = {}
@@ -245,10 +250,15 @@ export default function InputPage() {
     setErrors({})
     setSaving(true)
     try {
-      // 距離標：京都かつ両方入力済みの場合のみ "X.XXXkp～Y.YYYkp" 形式で保存
-      const distanceMarker = (isKyoto && distanceFrom && distanceTo)
-        ? `${parseFloat(distanceFrom).toFixed(3)}kp～${parseFloat(distanceTo).toFixed(3)}kp`
-        : null
+      // 距離標の保存形式
+      //  京都      : 両方入力済みのとき "X.XXXkp～Y.YYYkp"（範囲）
+      //  姫路・山崎 : 1つ目のみ入力するので "X.XXXkp"（開始kpのみ）
+      let distanceMarker: string | null = null
+      if (isKyoto && distanceFrom && distanceTo) {
+        distanceMarker = `${parseFloat(distanceFrom).toFixed(3)}kp～${parseFloat(distanceTo).toFixed(3)}kp`
+      } else if (isSingleKp && distanceFrom) {
+        distanceMarker = `${parseFloat(distanceFrom).toFixed(3)}kp`
+      }
 
       const body = {
         ...formData,
@@ -417,8 +427,8 @@ export default function InputPage() {
                   <th rowSpan={2} style={{ ...th, background: '#dce6f1' }}>担当<br />出張所名</th>
                   <th rowSpan={2} style={{ ...th, background: '#fde9d9' }}>橋梁名</th>
                   <th rowSpan={2} style={{ ...th, background: '#dce6f1' }}>号線</th>
-                  <th rowSpan={2} style={{ ...th, background: isKyoto ? '#e8f4e8' : '#f0f0f0', color: isKyoto ? '#1a5c1a' : '#aaa' }}>
-                    距離標<br /><span style={{ fontSize: '9px', fontWeight: 'normal' }}>{isKyoto ? '●kp～●kp' : '京都のみ'}</span>
+                  <th rowSpan={2} style={{ ...th, background: distanceEnabled ? '#e8f4e8' : '#f0f0f0', color: distanceEnabled ? '#1a5c1a' : '#aaa' }}>
+                    距離標<br /><span style={{ fontSize: '9px', fontWeight: 'normal' }}>{isKyoto ? '●kp～●kp' : isSingleKp ? '●kp' : '京都/姫路/山崎のみ'}</span>
                   </th>
                   <th colSpan={5} style={{ ...th, background: '#dce6f1', fontWeight: 'bold' }}>損傷・変状</th>
                   <th rowSpan={2} style={{ ...th, background: '#dce6f1' }}>備考<br />(特筆事項等)</th>
@@ -477,17 +487,17 @@ export default function InputPage() {
                       placeholder="—" />
                   </td>
                   {/* 距離標（マスタから自動入力・手動編集可） */}
-                  <td style={{ ...td, background: isKyoto ? '#fff' : '#f5f5f5' }}>
+                  <td style={{ ...td, background: distanceEnabled ? '#fff' : '#f5f5f5' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '2px', fontSize: '11px' }}>
                       <input
                         type="number" step="0.001" min="0"
                         value={distanceFrom}
                         onChange={e => setDistanceFrom(e.target.value)}
-                        disabled={!isKyoto}
-                        style={{ width: '50px', border: '1px solid #ccc', borderRadius: '3px', padding: '2px 3px', fontSize: '11px', background: isKyoto ? '#fff' : '#eee', color: isKyoto ? '#000' : '#aaa' }}
+                        disabled={!distanceEnabled}
+                        style={{ width: '50px', border: '1px solid #ccc', borderRadius: '3px', padding: '2px 3px', fontSize: '11px', background: distanceEnabled ? '#fff' : '#eee', color: distanceEnabled ? '#000' : '#aaa' }}
                         placeholder="0.000"
                       />
-                      <span style={{ color: isKyoto ? '#333' : '#aaa' }}>kp～</span>
+                      <span style={{ color: distanceEnabled ? '#333' : '#aaa' }}>kp～</span>
                       <input
                         type="number" step="0.001" min="0"
                         value={distanceTo}
