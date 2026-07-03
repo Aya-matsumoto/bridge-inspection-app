@@ -9,6 +9,7 @@ export async function POST(req: NextRequest) {
   const recordId = parseInt(formData.get('recordId') as string)
   const type = formData.get('type') as string
   const annotationData = formData.get('annotationData') as string | null
+  const sortOrderRaw = formData.get('sortOrder') as string | null
 
   if (!file || !recordId || !type) {
     return NextResponse.json({ error: 'Invalid request' }, { status: 400 })
@@ -45,6 +46,7 @@ export async function POST(req: NextRequest) {
       originalName: file.name,
       annotationData: annotationData || null,
       originalFilePath,
+      sortOrder: sortOrderRaw !== null ? parseInt(sortOrderRaw) : 0,
     },
   })
 

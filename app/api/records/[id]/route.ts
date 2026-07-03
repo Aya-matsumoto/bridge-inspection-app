@@ -6,7 +6,7 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
   const id = parseInt(params.id)
   const record = await prisma.inspectionRecord.findUnique({
     where: { id },
-    include: { photos: true },
+    include: { photos: { orderBy: { sortOrder: 'asc' } } },
   })
   if (!record) return NextResponse.json({ error: 'Not found' }, { status: 404 })
   return NextResponse.json(record)
@@ -23,7 +23,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   const record = await prisma.inspectionRecord.update({
     where: { id },
     data: updateData,
-    include: { photos: true },
+    include: { photos: { orderBy: { sortOrder: 'asc' } } },
   })
 
   // 発見日変更・削除ステータス変更があった場合に通し番号を再計算
@@ -31,7 +31,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     await recalcOfficeNo(record.subOffice)
     const refreshed = await prisma.inspectionRecord.findUnique({
       where: { id },
-      include: { photos: true },
+      include: { photos: { orderBy: { sortOrder: 'asc' } } },
     })
     return NextResponse.json(refreshed)
   }

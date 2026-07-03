@@ -355,7 +355,7 @@ export async function GET(req: NextRequest) {
   const records = await prisma.inspectionRecord.findMany({
     where,
     orderBy: [{ discoveryDate: 'asc' }, { bridgeName: 'asc' }],
-    include: { photos: true },
+    include: { photos: { orderBy: { sortOrder: 'asc' } } },
   })
 
   if (records.length === 0) {
