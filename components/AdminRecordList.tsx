@@ -159,6 +159,22 @@ export default function AdminRecordList({ initialRecords, offices }: Props) {
     else if (selectedPhotoIdx !== null && selectedPhotoIdx > index) setSelectedPhotoIdx(selectedPhotoIdx - 1)
   }
 
+  // ── 点検時写真：並び替え（1枚目＝全景・2枚目＝近景としてExcel出力されるため順序に意味がある）──
+  function moveInspPhoto(index: number, direction: -1 | 1) {
+    const target = index + direction
+    setEditInspPhotos(prev => {
+      if (target < 0 || target >= prev.length) return prev
+      const next = [...prev]
+      ;[next[index], next[target]] = [next[target], next[index]]
+      return next
+    })
+    setSelectedPhotoIdx(prev => {
+      if (prev === index) return target
+      if (prev === target) return index
+      return prev
+    })
+  }
+
   // ── 点検時写真：アノテーション保存 ──
   async function handlePhotoAnnotationSave(blob: Blob, shapes: object[]) {
     if (selectedPhotoIdx === null) return
@@ -274,28 +290,36 @@ export default function AdminRecordList({ initialRecords, offices }: Props) {
         await fetch(`/api/photos/${photoId}`, { method: 'DELETE' })
       }
 
-      // 3. 新規・アノテーション済み点検時写真のアップロード
-      for (const ep of editInspPhotos) {
-        // 既存写真はアノテーション済みの場合のみ再アップロード、新規写真はファイルがある場合のみ
-        const needsUpload = ep.annotatedBlob != null || (!ep.id && ep.file != null)
-        if (!needsUpload) continue
-        // アノテーション変更がある既存写真は削除して再アップロード
-        if (ep.id && ep.annotatedBlob) {
-          await fetch(`/api/photos/${ep.id}`, { method: 'DELETE' })
-        }
-        const fd = new FormData()
-        const fileToUpload = ep.annotatedBlob
-          ? new File([ep.annotatedBlob], 'inspection_photo.jpg', { type: 'image/jpeg' })
-          : ep.file!
-        fd.append('file', fileToUpload)
-        fd.append('recordId', String(editRecord.id))
-        fd.append('type', 'inspection')
-        if (ep.annotatedBlob && ep.file) fd.append('originalFile', ep.file)
-        if (ep.annotationData) fd.append('annotationData', ep.annotationData)
-        const uploadRes = await fetch('/api/photos', { method: 'POST', body: fd })
-        if (!uploadRes.ok) {
-          const err = await uploadRes.json().catch(() => ({}))
-          throw new Error(err.error ?? 'アップロード失敗')
+      // 3. 点検時写真の保存（新規追加・注釈更新・並び順の反映）
+      //    既存写真はその場更新（PATCH）にすることで id が変わらず、並び順が崩れない
+      for (let i = 0; i < editInspPhotos.length; i++) {
+        const ep = editInspPhotos[i]
+        if (ep.id) {
+          const fd = new FormData()
+          if (ep.annotatedBlob) {
+            fd.append('file', new File([ep.annotatedBlob], 'inspection_photo.jpg', { type: 'image/jpeg' }))
+            if (ep.file) fd.append('originalFile', ep.file)
+            if (ep.annotationData) fd.append('annotationData', ep.annotationData)
+          }
+          fd.append('sortOrder', String(i))
+          const patchRes = await fetch(`/api/photos/${ep.id}`, { method: 'PATCH', body: fd })
+          if (!patchRes.ok) throw new Error()
+        } else if (ep.file) {
+          const fd = new FormData()
+          const fileToUpload = ep.annotatedBlob
+            ? new File([ep.annotatedBlob], 'inspection_photo.jpg', { type: 'image/jpeg' })
+            : ep.file
+          fd.append('file', fileToUpload)
+          fd.append('recordId', String(editRecord.id))
+          fd.append('type', 'inspection')
+          fd.append('sortOrder', String(i))
+          if (ep.annotatedBlob) fd.append('originalFile', ep.file)
+          if (ep.annotationData) fd.append('annotationData', ep.annotationData)
+          const uploadRes = await fetch('/api/photos', { method: 'POST', body: fd })
+          if (!uploadRes.ok) {
+            const err = await uploadRes.json().catch(() => ({}))
+            throw new Error(err.error ?? 'アップロード失敗')
+          }
         }
       }
 
@@ -709,8 +733,11 @@ export default function AdminRecordList({ initialRecords, offices }: Props) {
                       <img src={p.preview} alt=""
                         className="w-full h-16 object-cover rounded"
                         onError={e => { (e.target as HTMLImageElement).style.display = 'none' }} />
+                      <span className="absolute top-0.5 left-0.5 bg-gray-800/70 text-white text-[9px] px-1 rounded">
+                        {i === 0 ? '①全景' : '②近景'}
+                      </span>
                       {p.annotatedBlob && (
-                        <span className="absolute top-0.5 left-0.5 bg-green-500 text-white text-[9px] px-1 rounded">✓書込済</span>
+                        <span className="absolute bottom-0.5 left-0.5 bg-green-500 text-white text-[9px] px-1 rounded">✓書込済</span>
                       )}
                       {p.file && !p.annotatedBlob && (
                         <span className="absolute bottom-0.5 left-0.5 bg-blue-500 text-white text-[9px] px-1 rounded">新規</span>
@@ -720,6 +747,16 @@ export default function AdminRecordList({ initialRecords, offices }: Props) {
                         onClick={e => { e.stopPropagation(); removeInspPhoto(i) }}
                         className="absolute top-0.5 right-0.5 bg-red-500 text-white rounded-full w-4 h-4 text-xs flex items-center justify-center leading-none"
                       >×</button>
+                      {editInspPhotos.length > 1 && (
+                        <div className="absolute bottom-0.5 right-0.5 flex gap-0.5">
+                          <button type="button" disabled={i === 0}
+                            onClick={e => { e.stopPropagation(); moveInspPhoto(i, -1) }}
+                            className="bg-gray-800/70 text-white rounded w-4 h-4 text-[9px] leading-none disabled:opacity-30">◀</button>
+                          <button type="button" disabled={i === editInspPhotos.length - 1}
+                            onClick={e => { e.stopPropagation(); moveInspPhoto(i, 1) }}
+                            className="bg-gray-800/70 text-white rounded w-4 h-4 text-[9px] leading-none disabled:opacity-30">▶</button>
+                        </div>
+                      )}
                     </div>
                   ))}
                   {editInspPhotos.length < 2 && (

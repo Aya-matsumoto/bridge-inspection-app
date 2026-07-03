@@ -188,6 +188,22 @@ export default function InputPage() {
     else if (selectedPhotoIdx !== null && selectedPhotoIdx > index) setSelectedPhotoIdx(selectedPhotoIdx - 1)
   }
 
+  // 点検時写真の並び替え（1枚目＝全景・2枚目＝近景としてExcel出力されるため順序に意味がある）
+  function moveInspectionPhoto(index: number, direction: -1 | 1) {
+    const target = index + direction
+    setInspectionPhotos(prev => {
+      if (target < 0 || target >= prev.length) return prev
+      const next = [...prev]
+      ;[next[index], next[target]] = [next[target], next[index]]
+      return next
+    })
+    setSelectedPhotoIdx(prev => {
+      if (prev === index) return target
+      if (prev === target) return index
+      return prev
+    })
+  }
+
   function handlePhotoAnnotationSave(blob: Blob, shapes: object[]) {
     if (selectedPhotoIdx === null) return
     const newPreview = URL.createObjectURL(blob)
@@ -282,7 +298,9 @@ export default function InputPage() {
       const record = await res.json()
 
       // 点検時写真をアップロード（書き込み済みがあればそちらを優先）
-      for (const photo of inspectionPhotos) {
+      // 並び順（1枚目＝全景・2枚目＝近景）を sortOrder として保存する
+      for (let i = 0; i < inspectionPhotos.length; i++) {
+        const photo = inspectionPhotos[i]
         const fd = new FormData()
         const fileToUpload = photo.annotatedBlob
           ? new File([photo.annotatedBlob], 'inspection_photo.jpg', { type: 'image/jpeg' })
@@ -290,6 +308,7 @@ export default function InputPage() {
         fd.append('file', fileToUpload)
         fd.append('recordId', String(record.id))
         fd.append('type', 'inspection')
+        fd.append('sortOrder', String(i))
         if (photo.annotatedBlob) fd.append('originalFile', photo.file)
         if (photo.annotationData) fd.append('annotationData', photo.annotationData)
         await fetch('/api/photos', { method: 'POST', body: fd })
@@ -595,8 +614,11 @@ export default function InputPage() {
                       onClick={() => setSelectedPhotoIdx(i === selectedPhotoIdx ? null : i)}
                     >
                       <img src={p.preview} alt="" className="w-full h-24 object-cover rounded" />
+                      <span className="absolute top-1 left-1 bg-gray-800/70 text-white text-[10px] px-1 py-0.5 rounded">
+                        {i === 0 ? '①全景' : '②近景'}
+                      </span>
                       {p.annotatedBlob && (
-                        <span className="absolute top-1 left-1 bg-green-500 text-white text-[10px] px-1 py-0.5 rounded">
+                        <span className="absolute top-1 right-6 bg-green-500 text-white text-[10px] px-1 py-0.5 rounded">
                           ✓ 書き込み済み
                         </span>
                       )}
@@ -604,6 +626,16 @@ export default function InputPage() {
                         className="absolute top-0.5 right-0.5 bg-red-500 text-white rounded-full w-5 h-5 text-xs flex items-center justify-center leading-none">
                         ×
                       </button>
+                      {inspectionPhotos.length > 1 && (
+                        <div className="absolute bottom-0.5 left-0.5 right-0.5 flex justify-between gap-1">
+                          <button type="button" disabled={i === 0}
+                            onClick={e => { e.stopPropagation(); moveInspectionPhoto(i, -1) }}
+                            className="bg-gray-800/70 text-white rounded w-6 h-5 text-xs disabled:opacity-30">◀</button>
+                          <button type="button" disabled={i === inspectionPhotos.length - 1}
+                            onClick={e => { e.stopPropagation(); moveInspectionPhoto(i, 1) }}
+                            className="bg-gray-800/70 text-white rounded w-6 h-5 text-xs disabled:opacity-30">▶</button>
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
