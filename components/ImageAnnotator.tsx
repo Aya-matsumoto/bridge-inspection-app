@@ -26,7 +26,7 @@ interface Props {
   onCancel: () => void
 }
 
-const RED = '#e53e3e'
+const RED = '#FF0000'
 const ARROW_HEAD = 16
 const HANDLE_SIZE = 8
 const HANDLE_TOL = 12
