@@ -20,3 +20,4 @@ public/uploads/
 # OS
 .DS_Store
 Thumbs.db
+backups/
