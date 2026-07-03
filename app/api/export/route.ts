@@ -205,7 +205,9 @@ function clonePhotoSheet(
     dstRow.height = srcRow.height
     for (let c = 1; c <= source.columnCount; c++) {
       const srcCell = srcRow.getCell(c)
-      dstRow.getCell(c).style = JSON.parse(JSON.stringify(srcCell.style))
+      const dstCell = dstRow.getCell(c)
+      dstCell.value = srcCell.value
+      dstCell.style = JSON.parse(JSON.stringify(srcCell.style))
     }
     dstRow.commit()
   }
