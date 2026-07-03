@@ -180,6 +180,42 @@ async function fixImageAnchors(xlsxBuf: ArrayBuffer): Promise<Buffer> {
 }
 
 // ─────────────────────────────────────────────────────────────
+// テンプレートの写真シート数を超えた分は、最後の写真シートを複製して補う
+// （列幅・行の高さ・結合セル・セルスタイル・印刷設定を丸ごとコピー）
+// ─────────────────────────────────────────────────────────────
+function clonePhotoSheet(
+  workbook: ExcelJS.Workbook,
+  sourceName: string,
+  newName: string
+): ExcelJS.Worksheet {
+  const source = workbook.getWorksheet(sourceName)!
+  const clone = workbook.addWorksheet(newName, {
+    properties: { ...source.properties },
+    pageSetup: { ...source.pageSetup },
+    views: JSON.parse(JSON.stringify(source.views)),
+  })
+
+  source.columns.forEach((col, i) => {
+    clone.getColumn(i + 1).width = (col as any)?.width
+  })
+
+  for (let r = 1; r <= source.rowCount; r++) {
+    const srcRow = source.getRow(r)
+    const dstRow = clone.getRow(r)
+    dstRow.height = srcRow.height
+    for (let c = 1; c <= source.columnCount; c++) {
+      const srcCell = srcRow.getCell(c)
+      dstRow.getCell(c).style = JSON.parse(JSON.stringify(srcCell.style))
+    }
+    dstRow.commit()
+  }
+
+  ;(source.model as any).merges.forEach((range: string) => clone.mergeCells(range))
+
+  return clone
+}
+
+// ─────────────────────────────────────────────────────────────
 // 写真シートにレコードデータ・画像を書き込む（全シート共通）
 // 新テンプレート（列A-E、5列構成）対応
 // ─────────────────────────────────────────────────────────────
@@ -398,9 +434,14 @@ export async function GET(req: NextRequest) {
   })
 
   // ── 写真シートの処理 ──
+  // テンプレートに用意された枚数（TEMPLATE_PHOTO_SHEET_COUNT）を超える場合は
+  // 最後の写真シートを複製して自動で追加する
   for (let i = 0; i < records.length; i++) {
     const sheetNum = i + 1
-    const ps = workbook.getWorksheet(`(${sheetNum})`)!
+    let ps = workbook.getWorksheet(`(${sheetNum})`)
+    if (!ps) {
+      ps = clonePhotoSheet(workbook, `(${TEMPLATE_PHOTO_SHEET_COUNT})`, `(${sheetNum})`)
+    }
     await fillPhotoSheet(workbook, ps, records[i], sheetNum, isRange, isPoint)
   }
 
