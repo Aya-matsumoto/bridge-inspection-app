@@ -34,6 +34,27 @@ function formatJpDate(date: Date): string {
 // テンプレートに用意されている写真シートの総数（expand_template.py で生成済み）
 const TEMPLATE_PHOTO_SHEET_COUNT = 20
 
+// 画像を並列取得する（1件ずつ順番に取得すると件数が多い月にサーバーの実行時間制限に
+// 引っかかってタイムアウトするため、同時に複数件まとめて取得する）
+async function fetchImageBuffersParallel(
+  filePaths: string[],
+  concurrency = 8
+): Promise<Map<string, Buffer | null>> {
+  const uniquePaths = [...new Set(filePaths)]
+  const result = new Map<string, Buffer | null>()
+  let cursor = 0
+  async function worker() {
+    while (cursor < uniquePaths.length) {
+      const path = uniquePaths[cursor++]
+      result.set(path, await fetchImageBuffer(path))
+    }
+  }
+  await Promise.all(
+    Array.from({ length: Math.min(concurrency, uniquePaths.length) }, worker)
+  )
+  return result
+}
+
 // ─────────────────────────────────────────────────────────────
 // 画像サイズ取得・配置ヘルパー
 // ─────────────────────────────────────────────────────────────
@@ -236,7 +257,8 @@ async function fillPhotoSheet(
   },
   sheetNum: number,
   isRange = false,   // kp_range: 距離標を E2 に出力
-  isPoint = false    // kp_point: 距離標を B8/B10 に付加
+  isPoint = false,   // kp_point: 距離標を B8/B10 に付加
+  imageBufCache: Map<string, Buffer | null>
 ) {
   const discoveryDate = new Date(record.discoveryDate)
 
@@ -286,7 +308,9 @@ async function fillPhotoSheet(
     tlCol: number, tlRow: number,
     brCol: number, brRow: number
   ) {
-    const buf = await fetchImageBuffer(filePath)
+    const buf = imageBufCache.has(filePath)
+      ? imageBufCache.get(filePath)!
+      : await fetchImageBuffer(filePath)
     if (!buf) return
     const ext = filePath.split('?')[0].split('.').pop()?.toLowerCase() ?? 'jpeg'
     const imgId = workbook.addImage({
@@ -438,13 +462,17 @@ export async function GET(req: NextRequest) {
   // ── 写真シートの処理 ──
   // テンプレートに用意された枚数（TEMPLATE_PHOTO_SHEET_COUNT）を超える場合は
   // 最後の写真シートを複製して自動で追加する
+  // 埋め込む写真をまとめて並列取得しておく（1件ずつ取得すると件数が多い月に時間がかかりすぎるため）
+  const allFilePaths = records.flatMap(r => r.photos.map(p => p.filePath))
+  const imageBufCache = await fetchImageBuffersParallel(allFilePaths)
+
   for (let i = 0; i < records.length; i++) {
     const sheetNum = i + 1
     let ps = workbook.getWorksheet(`(${sheetNum})`)
     if (!ps) {
       ps = clonePhotoSheet(workbook, `(${TEMPLATE_PHOTO_SHEET_COUNT})`, `(${sheetNum})`)
     }
-    await fillPhotoSheet(workbook, ps, records[i], sheetNum, isRange, isPoint)
+    await fillPhotoSheet(workbook, ps, records[i], sheetNum, isRange, isPoint, imageBufCache)
   }
 
   // 使わなかったテンプレート写真シートを削除
