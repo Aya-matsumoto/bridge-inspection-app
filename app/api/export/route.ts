@@ -235,6 +235,18 @@ function clonePhotoSheet(
 
   ;(source.model as any).merges.forEach((range: string) => clone.mergeCells(range))
 
+  // mergeCells() は結合範囲内の非マスターセル（左上以外）の style をマスターセルの
+  // style で上書きしてしまうため、結合セル内に個別の罫線が設定されている箇所
+  // （例: D5:E5 の結合で D5 と E5 に別々の罫線がある等）が消えてしまう。
+  // merge 後に元のスタイルを再設定し直して復元する。
+  for (let r = 1; r <= source.rowCount; r++) {
+    const srcRow = source.getRow(r)
+    const dstRow = clone.getRow(r)
+    for (let c = 1; c <= source.columnCount; c++) {
+      dstRow.getCell(c).style = JSON.parse(JSON.stringify(srcRow.getCell(c).style))
+    }
+  }
+
   return clone
 }
 
@@ -411,11 +423,28 @@ export async function GET(req: NextRequest) {
     })
   })
 
+  // テンプレートに罫線・行の高さが定義されている最終行（record_template.xlsx / kyoto とも31行目）
+  // を基準として保持しておく。レコード数が多く、この行を超えてデータを書き込む場合は
+  // 書式（罫線・行の高さ）が用意されていないため、この基準行の書式を複製して揃える。
+  const templateLastDataRow = ws.rowCount
+  const templateRowHeight = ws.getRow(templateLastDataRow).height
+  const templateCellStyles = Array.from({ length: ws.columnCount }, (_, idx) =>
+    JSON.parse(JSON.stringify(ws.getRow(templateLastDataRow).getCell(idx + 1).style))
+  )
+
   // ── Sheet1 にデータを書き込む（行5〜） ──
   records.forEach((record, i) => {
     const rowNum = 5 + i
     const discoveryDate = new Date(record.discoveryDate)
     const measureDate   = record.measureDate ? new Date(record.measureDate) : null
+
+    // テンプレートの罫線定義行を超えた行には、罫線・行の高さを複製して揃える
+    if (rowNum > templateLastDataRow) {
+      ws.getRow(rowNum).height = templateRowHeight
+      templateCellStyles.forEach((style, idx) => {
+        ws.getCell(rowNum, idx + 1).style = JSON.parse(JSON.stringify(style))
+      })
+    }
 
     // 京都テンプレートは E列=距離標 が追加されているため列が1つずれる
     const values: [number, ExcelJS.CellValue][] = isRange ? [
