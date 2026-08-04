@@ -2,6 +2,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getCurrentUser, parseAllowedOffices } from '@/lib/userAuth'
+import { sortRecordsBySpanNoWithinGroup } from '@/lib/utils'
 import ExcelJS from 'exceljs'
 import { join } from 'path'
 import { readFile } from 'fs/promises'
@@ -397,6 +398,9 @@ export async function GET(req: NextRequest) {
   if (records.length === 0) {
     return NextResponse.json({ error: '該当するデータがありません' }, { status: 404 })
   }
+
+  // データ一覧画面と同じく、日付・橋梁名は保ったまま径間番号を自然順で並べ替える
+  sortRecordsBySpanNoWithinGroup(records)
 
   // ── 出張所のフォーマット設定で様式を切り替え ──
   //  kp_range : 京都テンプレート（E列=距離標）＋ E2 出力
