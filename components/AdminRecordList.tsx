@@ -504,7 +504,9 @@ export default function AdminRecordList({ initialRecords, offices }: Props) {
                   <th className="p-3 text-left text-xs font-medium text-gray-600 whitespace-nowrap">橋梁名</th>
                   <th className="p-3 text-left text-xs font-medium text-gray-600 whitespace-nowrap hidden md:table-cell">距離標</th>
                   <th className="p-3 text-left text-xs font-medium text-gray-600 whitespace-nowrap hidden md:table-cell">損傷種別</th>
+                  <th className="p-3 text-left text-xs font-medium text-gray-600 whitespace-nowrap hidden md:table-cell">径間</th>
                   <th className="p-3 text-left text-xs font-medium text-gray-600 whitespace-nowrap hidden md:table-cell">位置</th>
+                  <th className="p-3 text-left text-xs font-medium text-gray-600 whitespace-nowrap hidden md:table-cell">要素番号</th>
                   <th className="p-3 text-left text-xs font-medium text-gray-600 whitespace-nowrap">発見日</th>
                   <th className="p-3 text-left text-xs font-medium text-gray-600 whitespace-nowrap">状態</th>
                   <th className="p-3 text-left text-xs font-medium text-gray-600 whitespace-nowrap">操作</th>
@@ -523,7 +525,13 @@ export default function AdminRecordList({ initialRecords, offices }: Props) {
                       {record.distanceMarker || <span className="text-gray-300">—</span>}
                     </td>
                     <td className="p-3 text-gray-600 text-xs hidden md:table-cell">{record.damageType}</td>
+                    <td className="p-3 text-gray-600 text-xs hidden md:table-cell whitespace-nowrap">
+                      {record.spanNo || <span className="text-gray-300">—</span>}
+                    </td>
                     <td className="p-3 text-gray-600 text-xs hidden md:table-cell">{record.location}</td>
+                    <td className="p-3 text-gray-600 text-xs hidden md:table-cell whitespace-nowrap">
+                      {record.elementNo || <span className="text-gray-300">—</span>}
+                    </td>
                     <td className="p-3 text-gray-600 text-xs whitespace-nowrap">{formatDate(record.discoveryDate)}</td>
                     <td className="p-3 text-xs whitespace-nowrap">
                       <span className={`px-1.5 py-0.5 rounded ${
@@ -558,7 +566,7 @@ export default function AdminRecordList({ initialRecords, offices }: Props) {
                 ))}
                 {filtered.length === 0 && (
                   <tr>
-                    <td colSpan={9} className="p-8 text-center text-gray-400 text-sm">データがありません</td>
+                    <td colSpan={11} className="p-8 text-center text-gray-400 text-sm">データがありません</td>
                   </tr>
                 )}
               </tbody>
