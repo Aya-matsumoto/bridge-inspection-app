@@ -18,7 +18,7 @@ export default async function AdminPage() {
       ...(allowed ? { subOffice: { in: allowed } } : {}),
     },
     orderBy: [{ discoveryDate: 'asc' }, { bridgeName: 'asc' }],
-    include: { photos: true },
+    include: { photos: { orderBy: { sortOrder: 'asc' } } },
   })
 
   sortRecordsBySpanNoWithinGroup(records)
