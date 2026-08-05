@@ -547,7 +547,7 @@ export default function InputPage() {
                   <td style={td}>
                     <input type="text" value={formData.location}
                       onChange={e => setFormData(prev => ({ ...prev, location: e.target.value }))}
-                      className={inputClass('location')} placeholder="例: 路面" />
+                      className={inputClass('location')} placeholder="例: 舗装" />
                   </td>
                   {/* 要素番号 */}
                   <td style={td}>
