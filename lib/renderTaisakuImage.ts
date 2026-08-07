@@ -48,13 +48,13 @@ export async function renderTaisakuImage(
     if (chosenMeta.height <= heightPx) break // 高さに収まった＝これ以上小さくしなくてよい
   }
 
-  // 白背景のキャンバスに配置して指定サイズちょうどの画像にする
+  // 白背景のキャンバスに上下中央揃えで配置する
   // （収まらなかった場合は上端から heightPx 分だけを切り出す）
-  const top = 0
   const cropHeight = Math.min(chosenMeta!.height, heightPx)
   const cropped = await sharp(chosenBuf!)
-    .extract({ left: 0, top, width: chosenMeta!.width, height: cropHeight })
+    .extract({ left: 0, top: 0, width: chosenMeta!.width, height: cropHeight })
     .toBuffer()
+  const pasteTop = Math.floor((heightPx - cropHeight) / 2)
 
   return sharp({
     create: {
@@ -64,7 +64,7 @@ export async function renderTaisakuImage(
       background: '#ffffff',
     },
   })
-    .composite([{ input: cropped, left: 0, top: 0 }])
+    .composite([{ input: cropped, left: 0, top: pasteTop }])
     .flatten({ background: '#ffffff' })
     .removeAlpha()
     .png()
