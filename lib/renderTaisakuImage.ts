@@ -28,12 +28,16 @@ export async function renderTaisakuImage(
   const candidateSizes = [16.5, 15, 13.5, 12, 10.5, 9]
   let chosenBuf: Buffer | null = null
   let chosenMeta: { width: number; height: number } | null = null
+  let chosenLeftPadding = 0
 
   for (const size of candidateSizes) {
+    // 左側に全角1文字分（≒フォントサイズと同じ幅）の余白を空けるため、
+    // その分だけ折り返し幅を狭めてレンダリングする
+    const leftPadding = Math.round(size)
     const buf = await sharp({
       text: {
         text: `<span font_desc="${FONT_FAMILY} ${size}">${escaped}</span>`,
-        width: widthPx,
+        width: widthPx - leftPadding,
         fontfile: FONT_FILE,
         rgba: true,
         wrap: 'word-char',
@@ -45,10 +49,11 @@ export async function renderTaisakuImage(
     const meta = await sharp(buf).metadata()
     chosenBuf = buf
     chosenMeta = { width: meta.width ?? widthPx, height: meta.height ?? heightPx }
+    chosenLeftPadding = leftPadding
     if (chosenMeta.height <= heightPx) break // 高さに収まった＝これ以上小さくしなくてよい
   }
 
-  // 白背景のキャンバスに上下中央揃えで配置する
+  // 白背景のキャンバスに、左に余白を空けつつ上下中央揃えで配置する
   // （収まらなかった場合は上端から heightPx 分だけを切り出す）
   const cropHeight = Math.min(chosenMeta!.height, heightPx)
   const cropped = await sharp(chosenBuf!)
@@ -64,7 +69,7 @@ export async function renderTaisakuImage(
       background: '#ffffff',
     },
   })
-    .composite([{ input: cropped, left: 0, top: pasteTop }])
+    .composite([{ input: cropped, left: chosenLeftPadding, top: pasteTop }])
     .flatten({ background: '#ffffff' })
     .removeAlpha()
     .png()
