@@ -6,7 +6,7 @@ import { join } from 'path'
 let fullFontCache: Buffer | null = null
 function loadFullFont(): Buffer {
   if (!fullFontCache) {
-    fullFontCache = readFileSync(join(process.cwd(), 'lib', 'fonts', 'NotoSansJP-Regular.ttf'))
+    fullFontCache = readFileSync(join(process.cwd(), 'lib', 'fonts', 'MPLUS1p-Regular.ttf'))
   }
   return fullFontCache
 }
@@ -52,7 +52,6 @@ export async function renderTaisakuImage(
   const fullFont = loadFullFont()
   const subsetBuf = await subsetFont(fullFont, text, {
     targetFormat: 'sfnt',
-    variationAxes: { wght: 400 },
   })
   const b64 = subsetBuf.toString('base64')
 
