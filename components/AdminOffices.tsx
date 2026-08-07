@@ -7,6 +7,7 @@ interface Office {
   name: string
   mainOffice: string
   format: string
+  taisakuEnabled: boolean
   isActive: boolean
   sortOrder: number
 }
@@ -26,7 +27,7 @@ export default function AdminOffices({ initialOffices }: Props) {
   const [offices, setOffices] = useState(initialOffices)
   const [showForm, setShowForm] = useState(false)
   const [editOffice, setEditOffice] = useState<Office | null>(null)
-  const [form, setForm] = useState({ name: '', mainOffice: '', format: 'normal', sortOrder: '0' })
+  const [form, setForm] = useState({ name: '', mainOffice: '', format: 'normal', taisakuEnabled: false, sortOrder: '0' })
   const [saving, setSaving] = useState(false)
 
   async function handleSave() {
@@ -53,7 +54,7 @@ export default function AdminOffices({ initialOffices }: Props) {
       }
       setShowForm(false)
       setEditOffice(null)
-      setForm({ name: '', mainOffice: '', format: 'normal', sortOrder: '0' })
+      setForm({ name: '', mainOffice: '', format: 'normal', taisakuEnabled: false, sortOrder: '0' })
     } catch {
       alert('エラーが発生しました。')
     } finally {
@@ -96,15 +97,34 @@ export default function AdminOffices({ initialOffices }: Props) {
     }
   }
 
+  // 一覧から直接「対応策」欄の有効/無効を切り替える（即時保存）
+  async function toggleTaisaku(office: Office) {
+    const prevOffices = offices
+    setOffices(prev => prev.map(o => o.id === office.id ? { ...o, taisakuEnabled: !o.taisakuEnabled } : o))
+    try {
+      const res = await fetch(`/api/offices/${office.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ taisakuEnabled: !office.taisakuEnabled }),
+      })
+      if (!res.ok) throw new Error()
+      const updated = await res.json()
+      setOffices(prev => prev.map(o => o.id === updated.id ? updated : o))
+    } catch {
+      setOffices(prevOffices)
+      alert('エラーが発生しました。')
+    }
+  }
+
   function openEdit(office: Office) {
     setEditOffice(office)
-    setForm({ name: office.name, mainOffice: office.mainOffice, format: office.format ?? 'normal', sortOrder: String(office.sortOrder) })
+    setForm({ name: office.name, mainOffice: office.mainOffice, format: office.format ?? 'normal', taisakuEnabled: office.taisakuEnabled, sortOrder: String(office.sortOrder) })
     setShowForm(true)
   }
 
   function openNew() {
     setEditOffice(null)
-    setForm({ name: '', mainOffice: '', format: 'normal', sortOrder: String(offices.length + 1) })
+    setForm({ name: '', mainOffice: '', format: 'normal', taisakuEnabled: false, sortOrder: String(offices.length + 1) })
     setShowForm(true)
   }
 
@@ -128,6 +148,7 @@ export default function AdminOffices({ initialOffices }: Props) {
                 <th className="p-3 text-left text-xs font-medium text-gray-600">出張所名</th>
                 <th className="p-3 text-left text-xs font-medium text-gray-600">担当事務所</th>
                 <th className="p-3 text-left text-xs font-medium text-gray-600">フォーマット</th>
+                <th className="p-3 text-left text-xs font-medium text-gray-600">対応策</th>
                 <th className="p-3 text-left text-xs font-medium text-gray-600">表示順</th>
                 <th className="p-3 text-left text-xs font-medium text-gray-600">状態</th>
                 <th className="p-3 text-left text-xs font-medium text-gray-600">操作</th>
@@ -148,6 +169,14 @@ export default function AdminOffices({ initialOffices }: Props) {
                         <option key={o.value} value={o.value}>{o.label}</option>
                       ))}
                     </select>
+                  </td>
+                  <td className="p-3">
+                    <input
+                      type="checkbox"
+                      checked={office.taisakuEnabled}
+                      onChange={() => toggleTaisaku(office)}
+                      className="w-4 h-4"
+                    />
                   </td>
                   <td className="p-3 text-gray-600">{office.sortOrder}</td>
                   <td className="p-3">
@@ -220,6 +249,20 @@ export default function AdminOffices({ initialOffices }: Props) {
                 </select>
                 <p className="text-xs text-gray-500 mt-1">
                   入力フォームの距離標欄とExcel出力の様式を切り替えます
+                </p>
+              </div>
+              <div>
+                <label className="flex items-center gap-2 text-sm font-medium text-gray-700">
+                  <input
+                    type="checkbox"
+                    checked={form.taisakuEnabled}
+                    onChange={e => setForm(prev => ({ ...prev, taisakuEnabled: e.target.checked }))}
+                    className="w-4 h-4"
+                  />
+                  対応策を使用する
+                </label>
+                <p className="text-xs text-gray-500 mt-1">
+                  チェックした出張所のみ入力フォームで対応策が入力できます
                 </p>
               </div>
               <div>

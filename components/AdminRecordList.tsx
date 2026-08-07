@@ -26,6 +26,7 @@ interface Record {
   location: string
   elementNo: string | null
   discoveryDate: string | Date
+  taisaku: string | null
   notes: string | null
   status: string
   photos: Photo[]
@@ -35,6 +36,7 @@ interface Office {
   id: number
   name: string
   format?: string
+  taisakuEnabled?: boolean
 }
 
 interface Props {
@@ -106,6 +108,7 @@ export default function AdminRecordList({ initialRecords, offices }: Props) {
       location: record.location,
       elementNo: record.elementNo,
       discoveryDate: record.discoveryDate,
+      taisaku: record.taisaku,
       notes: record.notes,
     })
     // 既存の点検時写真
@@ -433,6 +436,8 @@ export default function AdminRecordList({ initialRecords, offices }: Props) {
   const editFormat = offices.find(o => o.name === editForm.subOffice)?.format ?? 'normal'
   const editIsRange = editFormat === 'kp_range'
   const editIsPoint = editFormat === 'kp_point'
+  // 編集中レコードの出張所で対応策欄が有効化されているか
+  const editTaisakuEnabled = offices.find(o => o.name === editForm.subOffice)?.taisakuEnabled ?? false
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -714,6 +719,19 @@ export default function AdminRecordList({ initialRecords, offices }: Props) {
                     : (editForm.discoveryDate ? new Date(editForm.discoveryDate).toISOString().split('T')[0] : '')}
                   onChange={e => setEditForm(prev => ({ ...prev, discoveryDate: e.target.value }))}
                   className="w-full border border-gray-300 rounded p-2 text-sm" />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">
+                  対応策
+                  {!editTaisakuEnabled && <span className="ml-1 text-gray-400 font-normal">（対象出張所のみ入力可）</span>}
+                </label>
+                <textarea value={editForm.taisaku || ''}
+                  onChange={e => setEditForm(prev => ({ ...prev, taisaku: e.target.value }))}
+                  disabled={!editTaisakuEnabled}
+                  maxLength={500}
+                  rows={2}
+                  className={`w-full border border-gray-300 rounded p-2 text-sm ${!editTaisakuEnabled ? 'bg-gray-100 text-gray-400' : ''}`}
+                  placeholder={editTaisakuEnabled ? '自由記入（500字程度）' : ''} />
               </div>
               <div>
                 <label className="block text-xs font-medium text-gray-700 mb-1">備考</label>

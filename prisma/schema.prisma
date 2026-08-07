@@ -23,6 +23,7 @@ model InspectionRecord {
   measureStatus   String
   measureDate     DateTime?
   measurePlan     String?
+  taisaku         String?
   notes           String?
   status          String   @default("draft")
   deletedAt       DateTime?
@@ -49,6 +50,7 @@ model SubOfficeMaster {
   name        String   @unique
   mainOffice  String
   format      String   @default("normal") // normal | kp_range | kp_point
+  taisakuEnabled Boolean @default(false)
   isActive    Boolean  @default(true)
   sortOrder   Int      @default(0)
   createdAt   DateTime @default(now())

@@ -8,6 +8,7 @@ interface SubOffice {
   name: string
   mainOffice: string
   format?: string
+  taisakuEnabled?: boolean
 }
 
 interface BridgeMaster {
@@ -63,6 +64,7 @@ export default function InputPage() {
     location: '',
     elementNo: '',
     discoveryDate: '',
+    taisaku: '',
     notes: '',
   })
   // 距離標（京都のみ使用・マスタから自動設定）
@@ -95,8 +97,8 @@ export default function InputPage() {
   function handleOfficeChange(name: string) {
     const office = offices.find(o => o.name === name)
     const newMain = office?.mainOffice || ''
-    // 出張所を変えたら橋梁・号線・距離標をリセット
-    setFormData(prev => ({ ...prev, subOffice: name, mainOffice: newMain, bridgeName: '', routeNo: '' }))
+    // 出張所を変えたら橋梁・号線・距離標・対応策をリセット
+    setFormData(prev => ({ ...prev, subOffice: name, mainOffice: newMain, bridgeName: '', routeNo: '', taisaku: '' }))
     setDistanceFrom(''); setDistanceTo('')
   }
 
@@ -131,6 +133,8 @@ export default function InputPage() {
   const isPoint = officeFormat === 'kp_point'
   // 距離標入力（1つ目）が有効になるのは kp_range / kp_point
   const distanceEnabled = isRange || isPoint
+  // 対応策欄は選択中出張所で有効化されているときのみ入力可
+  const taisakuEnabled = offices.find(o => o.name === formData.subOffice)?.taisakuEnabled ?? false
 
   function validateForm() {
     const errs: Record<string, string> = {}
@@ -286,6 +290,7 @@ export default function InputPage() {
         measureStatus: '未',
         measureDate: null,
         measurePlan: null,
+        taisaku: taisakuEnabled ? (formData.taisaku || null) : null,
         notes: formData.notes || null,
         status,
       }
@@ -433,12 +438,13 @@ export default function InputPage() {
                 <col style={{ width: '110px' }} />{/* 位置 */}
                 <col style={{ width: '65px' }} />{/* 要素番号 */}
                 <col style={{ width: '100px' }} />{/* 発見日 */}
+                <col style={{ width: '120px' }} />{/* 対応策 */}
                 <col style={{ width: '90px' }} />{/* 備考 */}
               </colgroup>
               <thead>
                 {/* タイトル行 */}
                 <tr style={{ height: '28px', background: '#f0f4f8' }}>
-                  <th colSpan={11} style={{ ...th, fontSize: '12px', background: '#f0f4f8', letterSpacing: '0.02em' }}>
+                  <th colSpan={12} style={{ ...th, fontSize: '12px', background: '#f0f4f8', letterSpacing: '0.02em' }}>
                     {TITLE}
                   </th>
                 </tr>
@@ -452,6 +458,9 @@ export default function InputPage() {
                     距離標<br /><span style={{ fontSize: '9px', fontWeight: 'normal' }}>{isRange ? '●kp～●kp' : isPoint ? '●kp' : '対象出張所のみ'}</span>
                   </th>
                   <th colSpan={5} style={{ ...th, background: '#dce6f1', fontWeight: 'bold' }}>損傷・変状</th>
+                  <th rowSpan={2} style={{ ...th, background: taisakuEnabled ? '#e8f4e8' : '#f0f0f0', color: taisakuEnabled ? '#1a5c1a' : '#aaa' }}>
+                    対応策<br /><span style={{ fontSize: '9px', fontWeight: 'normal' }}>{taisakuEnabled ? '自由記入' : '対象出張所のみ'}</span>
+                  </th>
                   <th rowSpan={2} style={{ ...th, background: '#dce6f1' }}>備考<br />(特筆事項等)</th>
                 </tr>
                 {/* 中ヘッダー */}
@@ -561,6 +570,19 @@ export default function InputPage() {
                     <input type="date" value={formData.discoveryDate} max={today}
                       onChange={e => setFormData(prev => ({ ...prev, discoveryDate: e.target.value }))}
                       className={inputClass('discoveryDate')} />
+                  </td>
+                  {/* 対応策（出張所で有効化されている場合のみ入力可） */}
+                  <td style={{ ...td, background: taisakuEnabled ? '#fff' : '#f0f0f0' }}>
+                    <textarea
+                      value={formData.taisaku}
+                      onChange={e => setFormData(prev => ({ ...prev, taisaku: e.target.value }))}
+                      disabled={!taisakuEnabled}
+                      maxLength={500}
+                      rows={2}
+                      className="w-full border-0 p-1 text-sm resize-none focus:outline-none focus:ring-1 focus:ring-blue-400"
+                      style={{ background: taisakuEnabled ? '#fff' : '#f0f0f0', color: taisakuEnabled ? '#000' : '#aaa' }}
+                      placeholder={taisakuEnabled ? '自由記入（500字程度）' : '対象出張所のみ'}
+                    />
                   </td>
                   {/* 備考 */}
                   <td style={{ ...td, background: '#f5f5f5' }}>

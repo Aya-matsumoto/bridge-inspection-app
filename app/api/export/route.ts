@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getCurrentUser, parseAllowedOffices } from '@/lib/userAuth'
 import { sortRecordsBySpanNoWithinGroup } from '@/lib/utils'
+import { renderTaisakuImage } from '@/lib/renderTaisakuImage'
 import ExcelJS from 'exceljs'
 import { join } from 'path'
 import { readFile } from 'fs/promises'
@@ -266,6 +267,7 @@ async function fillPhotoSheet(
     location?: string
     elementNo?: string | null
     discoveryDate: Date | string
+    taisaku?: string | null
     photos: { type: string; filePath: string }[]
   },
   sheetNum: number,
@@ -344,6 +346,15 @@ async function fillPhotoSheet(
   // 近景: A9:C9 → tlCol=0, tlRow=8, brCol=3, brRow=9
   if (inspPhotos[0]) await embedImage(inspPhotos[0].filePath, 0, 6, 3, 7)
   if (inspPhotos[1]) await embedImage(inspPhotos[1].filePath, 0, 8, 3, 9)
+
+  // 対応策: D7:E7 → tlCol=3, tlRow=6, brCol=5, brRow=7
+  // テキストを画像化して埋め込む（未入力の場合はテンプレートの案内文のまま）
+  if (record.taisaku) {
+    const { cellW, cellH } = getCellAreaPx(ps, 3, 6, 5, 7)
+    const taisakuBuf = await renderTaisakuImage(record.taisaku, Math.round(cellW), Math.round(cellH))
+    const imgId = workbook.addImage({ buffer: taisakuBuf as any, extension: 'png' })
+    placeImageFit(ps, imgId, taisakuBuf, 'png', 3, 6, 5, 7)
+  }
 }
 
 // ─────────────────────────────────────────────────────────────
