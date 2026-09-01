@@ -291,9 +291,9 @@ async function fillPhotoSheet(
   // C2: 損傷種別
   ps.getCell('C2').value = record.damageType
   // E2: 距離標（kp_range のみ）
-  if (isRange && record.distanceMarker) {
-    ps.getCell('E2').value = record.distanceMarker
-  }
+  // テンプレート20枚を超えるレコードは直前のレコードの内容が残ったシートを複製して
+  // 作られるため、値がない場合も明示的に空にしないと前のレコードの文字が残ってしまう
+  ps.getCell('E2').value = (isRange && record.distanceMarker) ? record.distanceMarker : null
   // A6: 撮影日（A6:C6 マージ）
   ps.getCell('A6').value = `${formatJpDate(discoveryDate)}撮影`
 
@@ -310,12 +310,10 @@ async function fillPhotoSheet(
   const spanElemText = (isPoint && record.distanceMarker)
     ? [spanElem, record.distanceMarker].filter(Boolean).join('　')
     : spanElem
-  if (spanElemText) {
-    ps.getCell('B8').value = spanElemText
-    if (inspPhotos.length >= 2) {
-      ps.getCell('B10').value = spanElemText
-    }
-  }
+  // 同上の理由（テンプレート複製時に前レコードの文字が残る）で、
+  // 書く内容がない場合も明示的に空にする
+  ps.getCell('B8').value = spanElemText || null
+  ps.getCell('B10').value = (spanElemText && inspPhotos.length >= 2) ? spanElemText : null
 
   // ── 画像を埋め込む共通処理 ──
   async function embedImage(
